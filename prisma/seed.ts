@@ -1,8 +1,9 @@
 import { PrismaClient } from "@prisma/client";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { PrismaLibSql } from "@prisma/adapter-libsql";
 
-const url = process.env.DATABASE_URL || "file:./dev.db";
-const adapter = new PrismaBetterSqlite3({ url });
+const adapter = process.env.TURSO_DATABASE_URL
+  ? new PrismaLibSql({ url: process.env.TURSO_DATABASE_URL, authToken: process.env.TURSO_AUTH_TOKEN })
+  : new PrismaLibSql({ url: process.env.DATABASE_URL || "file:./dev.db" });
 const db = new PrismaClient({ adapter });
 
 async function main() {

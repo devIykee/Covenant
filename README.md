@@ -2,6 +2,8 @@
 
 **Covenant** is a conditional treasury platform built for the FlowVault Builder Bounty on Stacks testnet.
 
+**🔗 Live demo: [thecovenant.vercel.app](https://thecovenant.vercel.app)**
+
 Funds only move when real-world conditions are verifiably met.
 
 - **Primary feature**: Milestone-Gated Fundraising Vault (fully implemented end-to-end)
@@ -47,6 +49,25 @@ This satisfies bounty emphasis on "depth of use of FlowVault's programmable prim
 - Token (SIP-010): `ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx` — standard `transfer` / `get-balance`.
 
 The only setup that resembles a "deployment" is **funding the escrow custodian account** (the wallet behind `STACKS_PRIVATE_KEY`) with testnet STX (gas) + USDCx so it can pool and distribute. See the in-app **[Docs page](/docs)** for a click-by-click beginner walkthrough.
+
+### Database (local vs. production)
+
+Off-chain tracking (backers, attestations, reputation, check-ins) lives in a SQLite database via Prisma's driver adapter.
+
+- **Local dev:** a SQLite file (`file:./dev.db`) — a pre-seeded `dev.db` is included.
+- **Production (Vercel):** Vercel's filesystem is read-only, so a local file cannot be written. Covenant uses **[Turso](https://turso.tech)** — a hosted, SQLite-compatible (libSQL) database — with **no schema changes**. When `TURSO_DATABASE_URL` is set it is used automatically; otherwise the app falls back to the local file.
+
+One-time Turso setup:
+
+```bash
+turso auth signup
+turso db create covenant
+turso db shell covenant < schema.sql     # creates all tables (generated from the Prisma schema)
+turso db show covenant --url             # -> TURSO_DATABASE_URL
+turso db tokens create covenant          # -> TURSO_AUTH_TOKEN
+```
+
+Then add `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, and `STACKS_PRIVATE_KEY` in **Vercel → Project → Settings → Environment Variables** and redeploy.
 
 ## 🚀 Zero to Hero Guide (Even if you've never used Stacks before)
 
@@ -123,7 +144,7 @@ Open **http://localhost:3000** — or read the built-in **Docs** page at **http:
 #### Step-by-step (with exact things you will see)
 
 1. **Open the app and connect**
-   - Go to http://localhost:3000
+   - Go to the live app at https://thecovenant.vercel.app (or http://localhost:3000 if running locally)
    - Click the **CONNECT WALLET** button.
    - Approve in your wallet (Xverse/Leather).
    - Magic: Your address now appears in the top-right nav bar like `ST1ABC...1234` with a copy icon.

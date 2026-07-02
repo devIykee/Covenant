@@ -47,6 +47,18 @@ export default function DocsPage() {
             you from a blank machine to a real, auditable conditional-treasury transaction on the Stacks
             testnet — every click explained.
           </p>
+
+          <div className="mt-6 card-container p-5 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+            <div>
+              <div className="font-label-caps text-xs text-[var(--on-surface-variant)]">LIVE APP</div>
+              <a href="https://thecovenant.vercel.app" target="_blank" rel="noreferrer" className="font-data-sm text-[var(--ink)] underline hover:no-underline break-all">
+                thecovenant.vercel.app
+              </a>
+            </div>
+            <a href="https://thecovenant.vercel.app" target="_blank" rel="noreferrer" className="btn-primary text-center shrink-0">
+              OPEN THE LIVE APP ↗
+            </a>
+          </div>
         </header>
 
         {/* Table of contents */}
@@ -163,17 +175,22 @@ export default function DocsPage() {
                   Use the FlowVault bounty&rsquo;s &ldquo;Need Testnet USDCx?&rdquo; dispenser, or ask in the Stacks/FlowVault
                   community channel. Send some to your <code className="font-data-sm">ST…</code> address.
                 </Step>
-                <Step n={4} title="Run the app">
+                <Step n={4} title="Just want to try it? Use the live app">
+                  You don&rsquo;t have to run anything locally — the deployed app is at{" "}
+                  <a href="https://thecovenant.vercel.app" target="_blank" rel="noreferrer" className="underline text-[var(--ink)] hover:no-underline">thecovenant.vercel.app</a>.
+                  Connect a testnet wallet and go straight to the <a href="#walkthrough" className="underline hover:no-underline">walkthrough</a>.
+                </Step>
+                <Step n={5} title="Or run it locally (for developers)">
                   You need Node.js 18+. Then:
                   <Code>{`git clone <your-repo-url>
 cd covenant
 npm install
 cp .env.example .env       # then edit values (see below)
-npm run db:push
+npm run db:push            # local SQLite; for Vercel use Turso (step 7)
 npm run dev`}</Code>
                   Open <a href="http://localhost:3000" className="underline text-[var(--ink)] hover:no-underline">http://localhost:3000</a>.
                 </Step>
-                <Step n={5} title="Configure the custodian key (server-side only)">
+                <Step n={6} title="Configure the custodian key (server-side only)">
                   In <code className="font-data-sm">.env</code>, set <code className="font-data-sm">STACKS_PRIVATE_KEY</code> to the
                   private key of a <em>separate</em> funded testnet account — this is the escrow custodian. It is
                   read only on the server and never shipped to the browser.
@@ -184,6 +201,20 @@ NEXT_PUBLIC_FLOWVAULT_TOKEN_CONTRACT_ADDRESS=ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSR
 NEXT_PUBLIC_FLOWVAULT_TOKEN_CONTRACT_NAME=usdcx
 STACKS_PRIVATE_KEY=your_custodian_private_key_here
 DATABASE_URL="file:./dev.db"`}</Code>
+                </Step>
+                <Step n={7} title="Deploying to Vercel? Add a Turso database">
+                  Vercel&rsquo;s filesystem is read-only, so the local SQLite file can&rsquo;t be used in production.
+                  Covenant uses <a href="https://turso.tech" target="_blank" rel="noreferrer" className="underline text-[var(--ink)] hover:no-underline">Turso</a> (a hosted,
+                  SQLite-compatible database) — no schema changes needed. Create it, load the tables, and set two env vars in Vercel:
+                  <Code>{`turso auth signup
+turso db create covenant
+turso db shell covenant < schema.sql   # creates all tables
+
+# In Vercel -> Settings -> Environment Variables:
+TURSO_DATABASE_URL   (turso db show covenant --url)
+TURSO_AUTH_TOKEN     (turso db tokens create covenant)
+STACKS_PRIVATE_KEY   (your funded custodian key)`}</Code>
+                  When <code className="font-data-sm">TURSO_DATABASE_URL</code> is set it is used automatically; otherwise the app falls back to the local file.
                 </Step>
               </div>
               <p className="text-sm">
