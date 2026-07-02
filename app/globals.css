@@ -28,6 +28,65 @@ body {
   font-family: var(--font-body);
 }
 
+/* Dark Mode - Sophisticated dark ledger aesthetic */
+.dark {
+  --parchment: #0f141f;
+  --ink: #e8ebf5;
+  --signet: #c25a5a;
+  --brass: #d4af37;
+  --surface: #161b29;
+  --on-surface: #e8ebf5;
+  --on-surface-variant: #9aa3b8;
+  --surface-container-lowest: #0c101a;
+  --surface-container-low: #121720;
+  --surface-container: #1a202e;
+  --surface-container-high: #232a3a;
+  --outline: #4a5468;
+  --outline-variant: #3a4355;
+}
+
+.dark body {
+  background-color: var(--parchment);
+  color: var(--ink);
+}
+
+.dark .card-container,
+.dark .vault-card {
+  background-color: #121720;
+  border-color: rgba(232, 235, 245, 0.1);
+  box-shadow: 2px 2px 0px rgba(0, 0, 0, 0.3);
+}
+
+.dark .input-line {
+  background-color: rgba(232, 235, 245, 0.05);
+  border-bottom-color: rgba(232, 235, 245, 0.4);
+}
+
+.dark .input-line:focus {
+  border-bottom-color: #e8ebf5;
+  background-color: rgba(232, 235, 245, 0.08);
+}
+
+.dark .rule-line,
+.dark .rule-line-minor {
+  border-bottom-color: rgba(232, 235, 245, 0.1);
+}
+
+.dark .rule-line-major,
+.dark .rule-line-strong {
+  border-bottom-color: rgba(232, 235, 245, 0.2);
+}
+
+.dark .stamp-open {
+  border-color: #e8ebf5;
+  color: #e8ebf5;
+}
+
+.dark .progress-bar {
+  background-color: rgba(232, 235, 245, 0.15);
+  border-color: rgba(232, 235, 245, 0.15);
+}
+
 /* Font families */
 .font-display-lg,
 .font-display-lg-mobile,

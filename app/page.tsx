@@ -147,7 +147,13 @@ export default function CovenantHome() {
         </div>
 
         {/* Secondary Vaults teaser */}
-        <div id="vaults" className="mt-20 pt-12 border-t border-[#0B1D1D]/20">
+        <div id="docs" className="mt-20 pt-12 border-t border-[#0B1D1D]/20">
+          <div className="max-w-2xl mb-8">
+            <div className="font-label-caps text-xs text-[#424848]">NEW TO EVERYTHING?</div>
+            <h3 className="font-headline-md text-2xl mb-2">Zero to Hero in 10 Minutes</h3>
+            <p className="text-[#424848]">Follow the ridiculously detailed guide in the <a href="https://github.com/your-org/covenant#readme" target="_blank" className="underline text-[#0B1D1D] hover:no-underline">README → Zero to Hero Guide</a>. It explains every click, every screen, how to get free testnet money, and exactly what you will see when things succeed.</p>
+          </div>
+
           <div className="flex justify-between items-baseline mb-6">
             <div>
               <div className="font-label-caps text-xs text-[#424848]">ADDITIONAL PROGRAMMABLE BEHAVIORS</div>

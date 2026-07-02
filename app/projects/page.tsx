@@ -48,7 +48,7 @@ export default async function ProjectsList() {
 
               return (
                 <Link key={p.id} href={`/projects/${p.id}`} className="group">
-                  <article className="card-container p-6 flex flex-col h-full hover:bg-white/70 transition-colors">
+                  <article className="card-container p-6 flex flex-col h-full hover:bg-white/70 dark:hover:bg-white/5 transition-colors">
                     <div className="flex justify-between mb-4">
                       <span className="font-data-sm text-xs text-[#424848]">ID: {p.id.slice(0, 8)}</span>
                       {getStatusBadge(p.status)}

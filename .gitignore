@@ -21,6 +21,7 @@
 /build
 
 # misc
+stitch_covenant_treasury_platform/
 .DS_Store
 *.pem
 

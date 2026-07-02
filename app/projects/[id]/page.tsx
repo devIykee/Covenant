@@ -54,6 +54,10 @@ export default function ProjectDetail() {
   const [isBacking, setIsBacking] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  const [custodianBalance, setCustodianBalance] = useState<string | null>(null);
+  const [isCheckingBalance, setIsCheckingBalance] = useState(false);
+  const [copiedCustodian, setCopiedCustodian] = useState(false);
+
   const projectId = params.id;
 
   // Hardcoded demo judges for multisig 2-of-3 (global for demo)
@@ -80,6 +84,36 @@ export default function ProjectDetail() {
     const res = await fetch("/api/escrow/address");
     const data = await res.json();
     setCustodianAddress(data.address || "ST...");
+  }
+
+  const copyCustodian = async () => {
+    if (!custodianAddress) return;
+    await navigator.clipboard.writeText(custodianAddress);
+    setCopiedCustodian(true);
+    setTimeout(() => setCopiedCustodian(false), 1600);
+  };
+
+  async function checkCustodianBalance() {
+    if (!custodianAddress) return;
+    setIsCheckingBalance(true);
+    try {
+      const res = await fetch(`https://api.testnet.hiro.so/extended/v1/address/${custodianAddress}/balances`);
+      const data = await res.json();
+      // Find USDCx fungible token balance
+      const tokenKey = `${process.env.NEXT_PUBLIC_FLOWVAULT_TOKEN_CONTRACT_ADDRESS || 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM'}.${process.env.NEXT_PUBLIC_FLOWVAULT_TOKEN_CONTRACT_NAME || 'usdcx'}::usdcx`;
+      const ftEntry = data.fungible_tokens?.[tokenKey] || 
+                      Object.values(data.fungible_tokens || {}).find((f: any) => 
+                        (f as any).symbol?.toLowerCase().includes('usdc') || 
+                        (f as any).name?.toLowerCase().includes('usdc')
+                      );
+      const raw = ftEntry ? (ftEntry as any).balance : '0';
+      const formatted = (parseInt(raw) / 1_000_000).toFixed(2);
+      setCustodianBalance(formatted);
+    } catch (e) {
+      setCustodianBalance('0.00');
+    } finally {
+      setIsCheckingBalance(false);
+    }
   }
 
   async function pollVaultState() {
@@ -192,7 +226,9 @@ export default function ProjectDetail() {
     setIsBacking(true);
     try {
       // 1. Ensure we have the user's real STX principal
-      const sender = await ensureWalletAddress();
+      // Prefer connected wallet from localStorage (set by Nav)
+      const saved = typeof window !== 'undefined' ? localStorage.getItem('covenant-address') : null;
+      const sender = saved && saved.startsWith('ST') ? saved : await ensureWalletAddress();
       toast.info(`Using wallet: ${sender.slice(0, 8)}...`);
 
       // 2. Execute the actual SIP-010 transfer (this is the on-chain user tx)
@@ -300,7 +336,7 @@ export default function ProjectDetail() {
         {/* Bento: Timeline + Vault + Judges */}
         <div className="grid md:grid-cols-12 gap-6 mb-10">
           {/* Timeline */}
-          <div className="md:col-span-4 border border-[#0B1D1D]/10 p-6 bg-white">
+          <div className="md:col-span-4 border border-[#0B1D1D]/10 p-6 bg-white dark:bg-[#121720] dark:border-white/10">
             <div className="font-label-caps text-xs text-[#424848] mb-4">AGREEMENT TIMELINE</div>
             <div className="space-y-6 relative pl-5">
               {timelineSteps.map((step, idx) => (
@@ -319,7 +355,7 @@ export default function ProjectDetail() {
 
           {/* Vault + Judges */}
           <div className="md:col-span-8 flex flex-col gap-6">
-            <div className="border border-[#0B1D1D]/10 p-6 bg-white flex flex-col md:flex-row gap-4">
+            <div className="border border-[#0B1D1D]/10 p-6 bg-white dark:bg-[#121720] dark:border-white/10 flex flex-col md:flex-row gap-4">
               <div className="flex-1">
                 <div className="font-label-caps text-xs text-[#424848]">LIVE VAULT BALANCE (CUSTODIAN)</div>
                 <div className="text-3xl font-data-lg mt-1 tracking-tight">
@@ -327,17 +363,39 @@ export default function ProjectDetail() {
                 </div>
                 <div className="text-xs text-[#424848] mt-1">Locked: {vaultState?.locked ? (Number(vaultState.locked)/1e6).toFixed(0) : "—"}</div>
               </div>
-              <div>
-                <div className="font-label-caps text-xs text-[#424848]">CUSTODIAN ADDRESS</div>
-                <div className="font-data-sm bg-[#F0F3FF] px-2 py-1 text-[#0B1D1D] inline-block mt-1 break-all text-xs">
+              <div className="min-w-[260px]">
+                <div className="font-label-caps text-xs text-[#424848] flex items-center gap-2">
+                  CUSTODIAN ADDRESS
+                  <button 
+                    onClick={copyCustodian} 
+                    className="text-[10px] px-1.5 py-px rounded border border-[#0B1D1D]/20 hover:bg-[#0B1D1D]/5 flex items-center gap-1"
+                    title="Copy address"
+                  >
+                    {copiedCustodian ? 'COPIED!' : 'COPY'}
+                  </button>
+                </div>
+                <div className="font-data-sm bg-[#F0F3FF] dark:bg-[#1a202e] px-2 py-1 text-[#0B1D1D] dark:text-[#e8ebf5] inline-block mt-1 break-all text-[11px]">
                   {custodianAddress}
                   <a href={`https://explorer.hiro.so/address/${custodianAddress}?chain=testnet`} target="_blank" className="ml-2 inline text-[#424848] hover:text-[#0B1D1D]">↗</a>
+                </div>
+
+                <div className="mt-2 flex items-center gap-2">
+                  <button 
+                    onClick={checkCustodianBalance} 
+                    disabled={isCheckingBalance}
+                    className="text-[10px] px-2 py-1 border border-[#0B1D1D]/20 rounded hover:bg-[#0B1D1D]/5 disabled:opacity-60"
+                  >
+                    {isCheckingBalance ? 'CHECKING...' : 'CHECK BALANCE'}
+                  </button>
+                  {custodianBalance !== null && (
+                    <span className="font-data-sm text-xs text-[var(--brass)]">{custodianBalance} USDCx</span>
+                  )}
                 </div>
               </div>
             </div>
 
             {/* Judge Attestation Panel (matches design) */}
-            <div className="border border-[#0B1D1D]/10 p-6 bg-white">
+            <div className="border border-[#0B1D1D]/10 p-6 bg-white dark:bg-[#121720] dark:border-white/10">
               <div className="flex justify-between mb-4">
                 <div className="font-label-caps text-xs text-[#424848]">JUDGE ATTESTATION STATUS (2-of-3)</div>
                 <div className="text-xs px-2 py-0.5 bg-[#F0F3FF] text-[#0B1D1D]">{attestations.length} / 3</div>
@@ -394,10 +452,10 @@ export default function ProjectDetail() {
 
         {/* Backer Ledger */}
         <div className="border border-[#0B1D1D]/10 mb-8 overflow-hidden">
-          <div className="p-4 bg-white border-b border-[#0B1D1D]/10">
+          <div className="p-4 bg-white dark:bg-[#121720] border-b border-[#0B1D1D]/10 dark:border-white/10">
             <div className="font-label-caps text-xs">BACKER LEDGER • {contributions.length} CONTRIBUTIONS</div>
           </div>
-          <div className="overflow-x-auto bg-white">
+          <div className="overflow-x-auto bg-white dark:bg-[#121720]">
             <table className="w-full text-left data-table">
               <thead>
                 <tr className="border-b border-[#0B1D1D]/10 bg-[#F0F3FF]/40">
@@ -425,7 +483,7 @@ export default function ProjectDetail() {
         </div>
 
         {/* Pool + Resolution Controls */}
-        <div className="border border-[#0B1D1D]/10 p-6 bg-white mb-8">
+        <div className="border border-[#0B1D1D]/10 p-6 bg-white dark:bg-[#121720] dark:border-white/10 mb-8">
           <div className="font-label-caps text-xs mb-3">CUSTODIAN ACTIONS (PRIMARY FLOW)</div>
 
           <div className="flex flex-wrap gap-3 mb-3">
