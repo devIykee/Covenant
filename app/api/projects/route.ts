@@ -17,6 +17,7 @@ export async function POST(req: NextRequest) {
       builderAddress,
       treasuryAddress,
       minFundingBps,
+      deadlineAt,
     } = body;
 
     if (!title || !fundingGoal || !milestoneDescription || !deadlineBlock) {
@@ -34,6 +35,7 @@ export async function POST(req: NextRequest) {
         fundingGoal: String(fundingGoal),
         milestoneDescription,
         deadlineBlock: Number(deadlineBlock),
+        deadlineAt: deadlineAt ? new Date(deadlineAt) : null,
         disputeWindowBlocks: 144, // ~1 day buffer on testnet
         builderAddress: builderAddress || "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM",
         treasuryAddress: treasuryAddress || builderAddress || "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM",

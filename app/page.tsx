@@ -2,6 +2,8 @@ import { Nav } from "@/src/components/Nav";
 import Link from "next/link";
 import { db } from "@/src/lib/db";
 import { GuidedTour, type TourStep } from "@/src/components/GuidedTour";
+import { formatUsdcx } from "@/src/lib/units";
+import { formatDeadline } from "@/src/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -67,7 +69,7 @@ export default async function CovenantHome() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {projects.map((p) => {
-              const raised = p.contributions.reduce((s, c) => s + BigInt(c.amount), BigInt(0));
+              const raised = p.contributions.filter((c) => c.status !== "WITHDRAWN").reduce((s, c) => s + BigInt(c.amount), BigInt(0));
               const goal = BigInt(p.fundingGoal);
               const pct = goal > BigInt(0) ? Math.min(100, Number((raised * BigInt(100)) / goal)) : 0;
               const resolved = p.status === "RESOLVED_SUCCESS";
@@ -84,14 +86,14 @@ export default async function CovenantHome() {
                       <div>
                         <div className="flex justify-between items-end mb-2">
                           <span className="font-label-caps text-xs text-[var(--on-surface-variant)]">FUNDING PROGRESS</span>
-                          <span className="font-data-lg text-[15px] text-[var(--ink)]">{(Number(raised) / 1e6).toFixed(0)} / {(Number(goal) / 1e6).toFixed(0)} USDCx</span>
+                          <span className="font-data-lg text-[15px] text-[var(--ink)]">{formatUsdcx(raised.toString())} / {formatUsdcx(goal.toString())} USDCx</span>
                         </div>
                         <div className="progress-bar w-full"><div className={resolved ? "progress-brass" : "progress-fill"} style={{ width: `${resolved ? 100 : pct}%` }} /></div>
                       </div>
                       <div className="border-t border-[var(--ink)]/10 pt-4 space-y-1">
                         <div className="flex justify-between py-1 border-b border-[var(--ink)]/10 text-sm">
                           <span className="font-label-caps text-xs text-[var(--on-surface-variant)]">DEADLINE</span>
-                          <span className="font-data-sm text-[var(--ink)]">Block {p.deadlineBlock}</span>
+                          <span className="font-data-sm text-[var(--ink)]">{formatDeadline((p as any).deadlineAt, p.deadlineBlock)}</span>
                         </div>
                         <div className="flex justify-between py-1 text-sm">
                           <span className="font-label-caps text-xs text-[var(--on-surface-variant)]">INVESTORS</span>

@@ -6,6 +6,10 @@ import { Nav } from "@/src/components/Nav";
 import { GuidedTour, type TourStep } from "@/src/components/GuidedTour";
 import { toast } from "sonner";
 import Link from "next/link";
+import { formatUsdcx, toMicro, fromMicro } from "@/src/lib/units";
+import { formatDeadline } from "@/src/lib/format";
+import { eqAddr, includesAddr } from "@/src/lib/address";
+import { NextStep, type Role } from "@/src/components/NextStep";
 
 const DETAIL_TOUR: TourStep[] = [
   { selector: "#tour-timeline", title: "The lifecycle", body: "This timeline tracks the covenant from created → funded → locked → resolved. Each step logs its on-chain transaction." },
@@ -32,6 +36,7 @@ interface Project {
   fundingGoal: string;
   milestoneDescription: string;
   deadlineBlock: number;
+  deadlineAt?: string | null;
   status: string;
   builderAddress: string;
   treasuryAddress: string;
@@ -99,11 +104,19 @@ export default function ProjectDetail() {
   const minRequired = goal > BigInt(0) ? (goal * BigInt(minBps)) / BigInt(10000) : BigInt(0);
   const metMin = totalRaised >= minRequired || !!project?.builderAcceptedPartial;
 
-  const youAreJudge = !!connectedAddr && invitedJudges.includes(connectedAddr);
-  const youAreInvestor = !!connectedAddr && activeContribs.some((c) => c.principal === connectedAddr);
-  const youAreBuilder = !!connectedAddr && connectedAddr === project?.builderAddress;
+  const youAreJudge = includesAddr(invitedJudges, connectedAddr);
+  const youAreInvestor = !!connectedAddr && activeContribs.some((c) => eqAddr(c.principal, connectedAddr));
+  const youAreBuilder = eqAddr(connectedAddr, project?.builderAddress);
   const preLock = ["CREATED", "BACKING_OPEN"].includes(project?.status || "");
-  const canAppointJudges = youAreInvestor && ["CREATED", "BACKING_OPEN"].includes(project?.status || "");
+  const canAppointJudges = youAreInvestor && preLock;
+
+  const threshold = Math.min(2, invitedJudges.length || 2);
+  const metCount = attestations.filter((a) => a.vote === "MET" && includesAddr(invitedJudges, a.judge)).length;
+  const myContribMicro = activeContribs
+    .filter((c) => eqAddr(c.principal, connectedAddr))
+    .reduce((s, c) => s + BigInt(c.amount), BigInt(0))
+    .toString();
+  const stepRole: Role = youAreBuilder ? "builder" : "investor";
 
   async function handleAppointJudges(addresses: string[]) {
     if (!connectedAddr) { toast.error("Connect your wallet."); return; }
@@ -213,8 +226,7 @@ export default function ProjectDetail() {
                         (f as any).name?.toLowerCase().includes('usdc')
                       );
       const raw = ftEntry ? (ftEntry as any).balance : '0';
-      const formatted = (parseInt(raw) / 1_000_000).toFixed(2);
-      setCustodianBalance(formatted);
+      setCustodianBalance(fromMicro(raw).toFixed(2));
     } catch (e) {
       setCustodianBalance('0.00');
     } finally {
@@ -240,16 +252,19 @@ export default function ProjectDetail() {
     return () => clearInterval(interval);
   }, [projectId]);
 
-  // Simple status timeline
+  // Status timeline. Both resolved outcomes map to the final step; the last label
+  // reflects the actual outcome. Every backend status maps to exactly one index.
+  const resolvedFail = project?.status === "RESOLVED_FAILURE";
+  const resolvedOk = project?.status === "RESOLVED_SUCCESS";
   const timelineSteps = [
-    { label: "Created", status: "CREATED" },
-    { label: "Backing Open", status: "BACKING_OPEN" },
-    { label: "Pooled / Locked", status: "POOLED_LOCKED" },
-    { label: "Dispute Window", status: "DISPUTE_WINDOW" },
-    { label: "Resolved", status: "RESOLVED_SUCCESS" },
+    { label: "Created", statuses: ["CREATED"] },
+    { label: "Backing Open", statuses: ["BACKING_OPEN"] },
+    { label: "Locked in Escrow", statuses: ["POOLED_LOCKED"] },
+    { label: "Judging / Dispute Window", statuses: ["DISPUTE_WINDOW"] },
+    { label: resolvedFail ? "Resolved — Refunded" : "Resolved — Released", statuses: ["RESOLVED_SUCCESS", "RESOLVED_FAILURE"] },
   ];
-
-  const currentStatusIdx = timelineSteps.findIndex((s) => s.status === project?.status) || 0;
+  const foundIdx = timelineSteps.findIndex((s) => s.statuses.includes(project?.status || ""));
+  const currentStatusIdx = foundIdx < 0 ? 0 : foundIdx;
 
   // Helper to connect wallet and get STX address
   async function ensureWalletAddress(): Promise<string> {
@@ -300,7 +315,7 @@ export default function ProjectDetail() {
   async function handleBackProject() {
     if (!project || !custodianAddress) return;
 
-    const amountMicro = (parseFloat(backAmount) * 1_000_000).toString();
+    const amountMicro = toMicro(backAmount);
     if (!amountMicro || parseFloat(backAmount) <= 0) {
       toast.error("Enter a valid amount");
       return;
@@ -411,8 +426,8 @@ export default function ProjectDetail() {
     return <div className="min-h-screen flex items-center justify-center">Loading covenant...</div>;
   }
 
-  const raisedDisplay = (Number(totalRaised) / 1e6).toFixed(0);
-  const goalDisplay = (Number(goal) / 1e6).toFixed(0);
+  const raisedDisplay = formatUsdcx(totalRaised.toString());
+  const goalDisplay = formatUsdcx(goal.toString());
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -435,6 +450,23 @@ export default function ProjectDetail() {
           </div>
         </div>
 
+        {/* Guided "you are here" stepper — mirrors the settlement gates */}
+        <div className="mb-8 max-w-2xl">
+          <NextStep
+            role={stepRole}
+            id={project.id}
+            status={project.status}
+            raisedMicro={totalRaised.toString()}
+            goalMicro={goal.toString()}
+            minBps={minBps}
+            metMin={metMin}
+            judgeCount={invitedJudges.length}
+            metCount={metCount}
+            threshold={threshold}
+            myContributionMicro={myContribMicro}
+          />
+        </div>
+
         <div className="rule-line-major mb-8" />
 
         {/* Bento: Timeline + Vault + Judges */}
@@ -449,7 +481,13 @@ export default function ProjectDetail() {
                   <div className="text-sm">
                     <div className={idx <= currentStatusIdx ? "font-medium" : "text-[var(--on-surface-variant)]"}>{step.label}</div>
                     <div className="font-data-sm text-xs text-[var(--on-surface-variant)]">
-                      {idx === 2 && project.pooledTxid ? <a href={project.pooledExplorerUrl} target="_blank" className="explorer-link underline">TX logged</a> : "—"}
+                      {idx === 1 && (project.deadlineAt || project.deadlineBlock)
+                        ? `Deadline ${formatDeadline(project.deadlineAt, project.deadlineBlock)}`
+                        : idx === 2 && project.pooledExplorerUrl
+                        ? <a href={project.pooledExplorerUrl} target="_blank" className="explorer-link underline">Lock tx ↗</a>
+                        : idx === 4 && project.withdrawExplorerUrl
+                        ? <a href={project.withdrawExplorerUrl} target="_blank" className="explorer-link underline">Settlement tx ↗</a>
+                        : "—"}
                     </div>
                   </div>
                 </div>
@@ -463,9 +501,9 @@ export default function ProjectDetail() {
               <div className="flex-1">
                 <div className="font-label-caps text-xs text-[var(--on-surface-variant)]">LIVE VAULT BALANCE (CUSTODIAN)</div>
                 <div className="text-3xl font-data-lg mt-1 tracking-tight">
-                  {vaultState?.unlocked ? (Number(vaultState.unlocked) / 1e6).toFixed(0) : raisedDisplay} USDCx
+                  {vaultState?.unlocked ? formatUsdcx(vaultState.unlocked) : raisedDisplay} USDCx
                 </div>
-                <div className="text-xs text-[var(--on-surface-variant)] mt-1">Locked: {vaultState?.locked ? (Number(vaultState.locked)/1e6).toFixed(0) : "—"}</div>
+                <div className="text-xs text-[var(--on-surface-variant)] mt-1">Locked: {vaultState?.locked ? formatUsdcx(vaultState.locked) : "—"}</div>
               </div>
               <div className="min-w-[260px]">
                 <div className="font-label-caps text-xs text-[var(--on-surface-variant)] flex items-center gap-2">
@@ -501,8 +539,6 @@ export default function ProjectDetail() {
             {/* Judge Attestation Panel — invited independent verifiers */}
             <div id="tour-judgepanel" className="border border-[var(--ink)]/10 p-6 bg-white dark:bg-[#121720] dark:border-white/10">
               {(() => {
-                const threshold = Math.min(2, invitedJudges.length || 2);
-                const metCount = attestations.filter(a => a.vote === "MET" && invitedJudges.includes(a.judge)).length;
                 return (
                   <>
                     <div className="flex justify-between mb-1">
@@ -526,7 +562,7 @@ export default function ProjectDetail() {
                           />
                           <button type="button" disabled={isAppointing} onClick={() => handleAppointJudges([judgeInput])} className="btn-primary text-[10px] px-3 py-1.5 shrink-0 disabled:opacity-50">ADD</button>
                         </div>
-                        <button type="button" disabled={isAppointing || (!!connectedAddr && invitedJudges.includes(connectedAddr))} onClick={() => handleAppointJudges([connectedAddr as string])} className="mt-2 text-[10px] underline text-[var(--on-surface-variant)] hover:text-[var(--ink)] disabled:opacity-40">
+                        <button type="button" disabled={isAppointing || youAreJudge} onClick={() => handleAppointJudges([connectedAddr as string])} className="mt-2 text-[10px] underline text-[var(--on-surface-variant)] hover:text-[var(--ink)] disabled:opacity-40">
                           + Add myself as a judge
                         </button>
                       </div>
@@ -542,7 +578,7 @@ export default function ProjectDetail() {
                       <>
                         <div className="space-y-1 text-sm mb-5">
                           {invitedJudges.map((j, i) => {
-                            const att = attestations.find(a => a.judge === j);
+                            const att = attestations.find(a => eqAddr(a.judge, j));
                             const isYou = connectedAddr === j;
                             return (
                               <div key={i} className="flex justify-between py-2 rule-line-minor items-center text-xs gap-2">
@@ -650,7 +686,7 @@ export default function ProjectDetail() {
                 {contributions.map((c, idx) => (
                   <tr key={idx} className="border-b border-[var(--ink)]/10 hover:bg-[var(--parchment)]">
                     <td className="p-3 font-mono text-xs text-[var(--ink)]">{c.principal}</td>
-                    <td className="p-3 text-right">{(Number(c.amount) / 1e6).toFixed(0)}</td>
+                    <td className="p-3 text-right">{formatUsdcx(c.amount)}{c.status === "WITHDRAWN" && <span className="text-[var(--signet)] text-[10px] ml-1">(withdrawn)</span>}</td>
                     <td className="p-3 text-right text-[var(--on-surface-variant)] text-xs">{new Date().toISOString().slice(0, 16)}</td>
                     <td className="p-3 text-center">
                       {c.depositExplorerUrl ? <a href={c.depositExplorerUrl} target="_blank" className="explorer-link">↗</a> : "—"}
@@ -667,7 +703,7 @@ export default function ProjectDetail() {
           <div className="border border-[var(--ink)]/10 p-6 mb-8 rounded-sm">
             <div className="flex justify-between text-xs font-label-caps text-[var(--on-surface-variant)] mb-1.5">
               <span>FUNDING</span>
-              <span>{(Number(totalRaised) / 1e6).toFixed(0)} / {(Number(goal) / 1e6).toFixed(0)} USDCx · min {(minBps / 100).toFixed(0)}%</span>
+              <span>{formatUsdcx(totalRaised.toString())} / {formatUsdcx(goal.toString())} USDCx · min {(minBps / 100).toFixed(0)}%</span>
             </div>
             <div className="relative progress-bar w-full">
               <div className="progress-fill" style={{ width: `${progress}%` }} />
@@ -694,8 +730,6 @@ export default function ProjectDetail() {
           <p className="text-xs text-[var(--on-surface-variant)] mb-4">These lock and release the escrowed funds. Each produces a real on-chain transaction.</p>
 
           {(() => {
-            const threshold = Math.min(2, invitedJudges.length || 2);
-            const metCount = attestations.filter(a => a.vote === "MET" && invitedJudges.includes(a.judge)).length;
             const poolBlockReason =
               activeContribs.length === 0
                 ? "No investors have deposited yet."

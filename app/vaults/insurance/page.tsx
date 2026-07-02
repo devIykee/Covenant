@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
 import { depositUsdcxToCustodian, toMicroUsdcx } from "@/src/lib/deposit";
+import { formatUsdcx } from "@/src/lib/units";
 
 interface Contribution { id: string; principal: string; amount: string }
 interface Pool {
@@ -16,7 +17,7 @@ interface Pool {
   contributions: Contribution[];
 }
 
-const usd = (micro: string) => (Number(micro) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 2 });
+const usd = (micro: string) => formatUsdcx(micro);
 
 export default function InsuranceVaultPage() {
   const [pools, setPools] = useState<Pool[]>([]);

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/src/lib/db";
 import { transferToken } from "@/src/lib/escrow";
+import { eqAddr } from "@/src/lib/address";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -21,7 +22,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Funds are already locked — deposits can no longer be withdrawn here." }, { status: 400 });
   }
 
-  const mine = project.contributions.filter((c) => c.principal === investor && c.status !== "WITHDRAWN");
+  const mine = project.contributions.filter((c) => eqAddr(c.principal, investor) && c.status !== "WITHDRAWN");
   if (mine.length === 0) {
     return NextResponse.json({ error: "You have no active deposit to withdraw on this covenant." }, { status: 403 });
   }

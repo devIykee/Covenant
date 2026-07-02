@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
 import { depositUsdcxToCustodian, toMicroUsdcx } from "@/src/lib/deposit";
+import { formatUsdcx } from "@/src/lib/units";
 
 interface Participant {
   principal: string;
@@ -18,7 +19,7 @@ interface RepVault {
   participants: Participant[];
 }
 
-const usd = (micro: string) => (Number(micro) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 2 });
+const usd = (micro: string) => formatUsdcx(micro);
 
 export function ReputationManager({ scores }: { scores: Record<string, number> }) {
   const [vaults, setVaults] = useState<RepVault[]>([]);

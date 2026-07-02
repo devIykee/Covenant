@@ -105,6 +105,7 @@ const MIGRATIONS = [
   `ALTER TABLE "BackerContribution" ADD COLUMN "status" TEXT NOT NULL DEFAULT 'ACTIVE'`,
   `ALTER TABLE "BackerContribution" ADD COLUMN "refundTxid" TEXT`,
   `ALTER TABLE "BackerContribution" ADD COLUMN "refundExplorerUrl" TEXT`,
+  `ALTER TABLE "Project" ADD COLUMN "deadlineAt" DATETIME`,
 ];
 
 async function runMigrations() {

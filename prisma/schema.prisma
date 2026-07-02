@@ -14,7 +14,8 @@ model Project {
   description         String
   fundingGoal         String   // micro units as string
   milestoneDescription String
-  deadlineBlock       Int      // Stacks block height
+  deadlineBlock       Int      // Stacks block height (derived from deadlineAt)
+  deadlineAt          DateTime? // the builder's chosen deadline date + time
   disputeWindowBlocks Int      @default(144) // ~48h on testnet approx
   builderAddress      String
   treasuryAddress     String   // builder's receive addr, usually same or separate

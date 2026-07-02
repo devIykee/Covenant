@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/src/lib/db";
 import { poolIntoVault, getCustodianAddress } from "@/src/lib/escrow";
+import { formatUsdcx } from "@/src/lib/units";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -34,7 +35,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const minRequired = (goal * BigInt((project as any).minFundingBps ?? 10000)) / BigInt(10000);
   if (totalBig < minRequired && !(project as any).builderAcceptedPartial) {
     const pct = Math.round(((project as any).minFundingBps ?? 10000) / 100);
-    return NextResponse.json({ error: `Raised ${(Number(total) / 1e6).toFixed(0)} of the ${pct}% minimum (${(Number(minRequired) / 1e6).toFixed(0)} USDCx). Wait for more or accept the partial raise.` }, { status: 400 });
+    return NextResponse.json({ error: `Raised ${formatUsdcx(total)} of the ${pct}% minimum (${formatUsdcx(minRequired.toString())} USDCx). Wait for more or accept the partial raise.` }, { status: 400 });
   }
 
   // Lock 100% until deadline + dispute window

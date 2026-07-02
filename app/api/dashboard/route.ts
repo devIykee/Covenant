@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/src/lib/db";
+import { eqAddr } from "@/src/lib/address";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -30,6 +31,11 @@ export async function GET(req: NextRequest) {
       minFundingBps: p.minFundingBps ?? 10000,
       builderAcceptedPartial: p.builderAcceptedPartial ?? false,
       builderAddress: p.builderAddress,
+      deadlineAt: p.deadlineAt,
+      deadlineBlock: p.deadlineBlock,
+      judges,
+      pooledExplorerUrl: p.pooledExplorerUrl,
+      withdrawExplorerUrl: p.withdrawExplorerUrl,
       raised: raised.toString(),
       minRequired: minRequired.toString(),
       metMin,
@@ -42,12 +48,12 @@ export async function GET(req: NextRequest) {
     };
   };
 
-  const asBuilder = projects.filter((p: any) => p.builderAddress === address).map(shape);
+  const asBuilder = projects.filter((p: any) => eqAddr(p.builderAddress, address)).map(shape);
   const asInvestor = projects
-    .filter((p: any) => p.contributions.some((c: any) => c.principal === address))
+    .filter((p: any) => p.contributions.some((c: any) => eqAddr(c.principal, address)))
     .map((p: any) => {
       const base = shape(p);
-      const mine = p.contributions.filter((c: any) => c.principal === address);
+      const mine = p.contributions.filter((c: any) => eqAddr(c.principal, address));
       const myActive = mine
         .filter((c: any) => c.status !== "WITHDRAWN")
         .reduce((s: bigint, c: any) => s + BigInt(c.amount), BigInt(0));

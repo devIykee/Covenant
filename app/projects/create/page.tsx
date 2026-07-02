@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Nav } from "@/src/components/Nav";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { getCurrentBlockHeight } from "@/src/lib/flowvault";
+import { toMicro } from "@/src/lib/units";
 import { GuidedTour, type TourStep } from "@/src/components/GuidedTour";
 
 const CREATE_TOUR: TourStep[] = [
@@ -23,6 +24,11 @@ export default function CreateProject() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [estimatedBlock, setEstimatedBlock] = useState<number | null>(null);
+  const [connectedAddr, setConnectedAddr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") setConnectedAddr(localStorage.getItem("covenant-address"));
+  }, []);
 
   const [form, setForm] = useState({
     title: "",
@@ -35,9 +41,10 @@ export default function CreateProject() {
     minPct: "100",
   });
 
-  // Estimate block height from date (testnet ~ 144 blocks/hour ~ 3456/day)
+  // Estimate block height from the full date+time (testnet ~ 144 blocks/hour).
+  const BLOCKS_PER_HOUR = 144;
   const handleDateChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
+    const val = e.target.value; // datetime-local, e.g. "2026-07-15T18:00"
     setForm({ ...form, deadlineDate: val });
 
     if (val) {
@@ -45,8 +52,8 @@ export default function CreateProject() {
         const current = await getCurrentBlockHeight();
         const target = new Date(val).getTime();
         const now = Date.now();
-        const days = Math.max(1, Math.ceil((target - now) / (1000 * 60 * 60 * 24)));
-        const est = Math.floor(current + days * 3456); // rough blocks per day on testnet
+        const hours = Math.max(1, (target - now) / (1000 * 60 * 60));
+        const est = Math.floor(current + hours * BLOCKS_PER_HOUR);
         setEstimatedBlock(est);
       } catch {
         setEstimatedBlock(null);
@@ -63,8 +70,14 @@ export default function CreateProject() {
         throw new Error("All fields are required");
       }
 
-      // Convert goal to micro (assume USDCx has 6 decimals)
-      const goalMicro = (parseFloat(form.fundingGoal) * 1_000_000).toString();
+      // The builder IS the connected wallet (or an address they explicitly typed).
+      // Without this, the campaign wouldn't show up on their dashboard.
+      const builder = (form.builderAddress || connectedAddr || "").trim();
+      if (!/^S[TP][0-9A-Z]{38,40}$/.test(builder)) {
+        throw new Error("Connect your wallet (or enter your Stacks address) so this campaign is linked to you.");
+      }
+
+      const goalMicro = toMicro(form.fundingGoal);
 
       const currentBlock = await getCurrentBlockHeight();
       const targetBlock = estimatedBlock || (currentBlock + 5000);
@@ -78,8 +91,9 @@ export default function CreateProject() {
           fundingGoal: goalMicro,
           milestoneDescription: form.milestoneDescription,
           deadlineBlock: targetBlock,
-          builderAddress: form.builderAddress || "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM", // fallback demo
-          treasuryAddress: form.treasuryAddress || form.builderAddress || "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM",
+          deadlineAt: new Date(form.deadlineDate).toISOString(),
+          builderAddress: builder,
+          treasuryAddress: (form.treasuryAddress || builder).trim(),
           minFundingBps: Math.round(Math.min(100, Math.max(1, Number(form.minPct) || 100)) * 100),
         }),
       });
@@ -188,17 +202,18 @@ export default function CreateProject() {
               </div>
 
               <div>
-                <label className="block font-label-caps text-xs text-[var(--on-surface-variant)] mb-2">EXECUTION DEADLINE</label>
+                <label className="block font-label-caps text-xs text-[var(--on-surface-variant)] mb-2">EXECUTION DEADLINE (DATE &amp; TIME)</label>
                 <input
                   id="tour-deadline"
-                  type="date"
+                  type="datetime-local"
                   value={form.deadlineDate}
                   onChange={handleDateChange}
                   className="input-line w-full px-4 py-3 font-data-lg text-lg"
                   required
                 />
                 <p className="mt-1.5 font-data-sm text-xs text-[var(--on-surface-variant)]">
-                  Estimated Block Height: <span className="font-bold text-[var(--ink)]">{estimatedBlock ?? "—"}</span>
+                  {form.deadlineDate ? <>Deadline: <span className="font-bold text-[var(--ink)]">{new Date(form.deadlineDate).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</span> · </> : null}
+                  approx. block <span className="font-bold text-[var(--ink)]">{estimatedBlock ?? "—"}</span>
                 </p>
               </div>
             </div>
@@ -223,14 +238,15 @@ export default function CreateProject() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-6">
               <div>
-                <label className="block font-label-caps text-xs text-[var(--on-surface-variant)] mb-2">BUILDER PRINCIPAL (OPTIONAL)</label>
+                <label className="block font-label-caps text-xs text-[var(--on-surface-variant)] mb-2">BUILDER PRINCIPAL (YOUR WALLET)</label>
                 <input
                   id="tour-builder"
                   value={form.builderAddress}
                   onChange={(e) => setForm({ ...form, builderAddress: e.target.value })}
                   className="input-line w-full px-4 py-3 font-data-sm"
-                  placeholder="ST... (your address)"
+                  placeholder={connectedAddr || "ST... (connect your wallet)"}
                 />
+                <p className="mt-1 text-[11px] text-[var(--on-surface-variant)]">{connectedAddr ? "Defaults to your connected wallet — leave blank to use it." : "Connect your wallet so this campaign appears on your dashboard."}</p>
               </div>
               <div>
                 <label className="block font-label-caps text-xs text-[var(--on-surface-variant)] mb-2">TREASURY ADDRESS</label>

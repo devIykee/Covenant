@@ -4,6 +4,9 @@ import { Nav } from "@/src/components/Nav";
 import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
+import { formatUsdcx } from "@/src/lib/units";
+import { formatDeadline } from "@/src/lib/format";
+import { NextStep } from "@/src/components/NextStep";
 
 interface Investor { principal: string; amount: string; depositExplorerUrl: string | null }
 interface DashProject {
@@ -18,11 +21,13 @@ interface DashProject {
   metMin: boolean;
   judgeCount: number;
   investors: Investor[];
+  deadlineAt?: string | null;
+  deadlineBlock?: number;
   myContribution?: string;
   myWithdrawn?: boolean;
 }
 
-const usd = (m: string) => (Number(m) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 2 });
+const usd = (m: string) => formatUsdcx(m);
 const preLock = (s: string) => s === "CREATED" || s === "BACKING_OPEN";
 
 function badge(status: string) {
@@ -33,17 +38,6 @@ function badge(status: string) {
     DISPUTE_WINDOW: "bg-[var(--ink)]/15 text-[var(--ink)]",
   };
   return <span className={`text-[10px] font-label-caps px-2 py-0.5 rounded ${map[status] || "bg-[var(--ink)]/10 text-[var(--ink)]"}`}>{status.replace("_", " ")}</span>;
-}
-
-function nextStep(p: DashProject): string {
-  if (p.status === "RESOLVED_SUCCESS") return "Complete — funds released.";
-  if (p.status === "RESOLVED_FAILURE") return "Closed — investors refunded.";
-  if (p.status === "POOLED_LOCKED") return "Funds locked in escrow; awaiting judge attestation.";
-  if (p.status === "DISPUTE_WINDOW") return "Judges attested MET — in the dispute window before release.";
-  if (p.investors.length === 0) return "Waiting for investors to deposit.";
-  if (p.judgeCount === 0) return "Investors need to appoint judges before funds can lock.";
-  if (!p.metMin) return "Below your minimum — accept the partial raise to proceed, or wait for more.";
-  return "Ready to lock funds in escrow.";
 }
 
 export default function Dashboard() {
@@ -161,7 +155,11 @@ export default function Dashboard() {
                     {badge(p.status)}
                   </div>
                   <ProgressRow p={p} />
-                  <p className="text-xs text-[var(--on-surface-variant)] mt-3"><strong className="text-[var(--ink)]">Next:</strong> {nextStep(p)}</p>
+                  <p className="text-xs text-[var(--on-surface-variant)] mt-2">Deadline: {formatDeadline(p.deadlineAt, p.deadlineBlock)}</p>
+
+                  <div className="mt-4">
+                    <NextStep role="builder" id={p.id} status={p.status} raisedMicro={p.raised} goalMicro={p.fundingGoal} minBps={p.minFundingBps} metMin={p.metMin} judgeCount={p.judgeCount} />
+                  </div>
 
                   <div className="mt-4 border-t border-[var(--ink)]/10 pt-3">
                     <div className="font-label-caps text-[10px] text-[var(--on-surface-variant)] mb-2">INVESTORS ({p.investors.length})</div>
@@ -213,6 +211,7 @@ export default function Dashboard() {
                     {badge(p.status)}
                   </div>
                   <ProgressRow p={p} />
+                  <p className="text-xs text-[var(--on-surface-variant)] mt-2">Deadline: {formatDeadline(p.deadlineAt, p.deadlineBlock)}</p>
                   <div className="flex justify-between items-center mt-3">
                     <p className="text-xs text-[var(--on-surface-variant)]">
                       <strong className="text-[var(--ink)]">Your deposit:</strong> {usd(p.myContribution || "0")} USDCx {p.myWithdrawn && <span className="text-[var(--signet)]">(withdrawn)</span>}
@@ -223,7 +222,9 @@ export default function Dashboard() {
                       </button>
                     )}
                   </div>
-                  <p className="text-xs text-[var(--on-surface-variant)] mt-2"><strong className="text-[var(--ink)]">Status:</strong> {nextStep(p)}</p>
+                  <div className="mt-4">
+                    <NextStep role="investor" id={p.id} status={p.status} raisedMicro={p.raised} goalMicro={p.fundingGoal} minBps={p.minFundingBps} metMin={p.metMin} judgeCount={p.judgeCount} myContributionMicro={p.myContribution} myWithdrawn={p.myWithdrawn} />
+                  </div>
                 </div>
               ))}
             </div>

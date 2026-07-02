@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
 import { depositUsdcxToCustodian, toMicroUsdcx } from "@/src/lib/deposit";
+import { formatUsdcx } from "@/src/lib/units";
 
 interface CheckIn {
   id: string;
@@ -25,7 +26,7 @@ interface Payroll {
   checkIns: CheckIn[];
 }
 
-const usd = (micro: string) => (Number(micro) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 2 });
+const usd = (micro: string) => formatUsdcx(micro);
 
 export default function PayrollVaultPage() {
   const [vaults, setVaults] = useState<Payroll[]>([]);

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/src/lib/db";
+import { eqAddr } from "@/src/lib/address";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -13,7 +14,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const project = await db.project.findUnique({ where: { id } });
   if (!project) return NextResponse.json({ error: "Covenant not found" }, { status: 404 });
 
-  if (builder !== project.builderAddress) {
+  if (!eqAddr(builder, project.builderAddress)) {
     return NextResponse.json({ error: "Only the builder can accept a partial raise." }, { status: 403 });
   }
   if (!["CREATED", "BACKING_OPEN"].includes(project.status)) {

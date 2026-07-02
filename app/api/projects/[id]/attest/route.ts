@@ -3,6 +3,7 @@ import { db } from "@/src/lib/db";
 import { verifyMessageSignatureRsv } from "@stacks/encryption";
 import { getAddressFromPublicKey } from "@stacks/transactions";
 import { FLOWVAULT_NETWORK } from "@/src/lib/flowvault";
+import { eqAddr, includesAddr } from "@/src/lib/address";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -27,7 +28,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (invitedJudges.length === 0) {
     return NextResponse.json({ error: "No judges have been invited for this covenant yet." }, { status: 400 });
   }
-  if (!invitedJudges.includes(judge)) {
+  if (!includesAddr(invitedJudges, judge)) {
     return NextResponse.json({ error: "This address is not an invited judge for this covenant." }, { status: 403 });
   }
 
@@ -49,7 +50,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   } catch {
     signerAddress = "";
   }
-  if (signerAddress !== judge) {
+  if (!eqAddr(signerAddress, judge)) {
     return NextResponse.json({ error: "The signature does not match the invited judge's address." }, { status: 401 });
   }
 
@@ -65,7 +66,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // Auto advance once the MET threshold (2-of-N) is reached. Only count votes
   // from currently-invited judges.
   const atts = await db.judgeAttestation.findMany({ where: { projectId: id } });
-  const metCount = atts.filter(a => a.vote === "MET" && invitedJudges.includes(a.judge)).length;
+  const metCount = atts.filter(a => a.vote === "MET" && includesAddr(invitedJudges, a.judge)).length;
 
   if (metCount >= threshold && !["POOLED_LOCKED", "DISPUTE_WINDOW", "RESOLVED_SUCCESS"].includes(project.status)) {
     await db.project.update({ where: { id }, data: { status: "DISPUTE_WINDOW" } });

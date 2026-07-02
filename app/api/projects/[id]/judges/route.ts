@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/src/lib/db";
+import { eqAddr, includesAddr } from "@/src/lib/address";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   // Caller must be an investor who has actually deposited into this covenant.
-  const isInvestor = project.contributions.some((c) => c.principal === investor);
+  const isInvestor = project.contributions.some((c) => eqAddr(c.principal, investor) && c.status !== "WITHDRAWN");
   if (!isInvestor) {
     return NextResponse.json({ error: "Only investors who have deposited can appoint judges." }, { status: 403 });
   }
@@ -43,7 +44,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   } catch {
     current = [];
   }
-  const merged = Array.from(new Set([...current, ...incoming]));
+  // Dedup case-insensitively against already-appointed judges.
+  const merged = [...current];
+  for (const j of incoming) if (!includesAddr(merged, j)) merged.push(j);
 
   await db.project.update({ where: { id }, data: { judges: JSON.stringify(merged) } });
   await db.projectStateLog.create({

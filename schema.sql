@@ -6,6 +6,7 @@ CREATE TABLE "Project" (
     "fundingGoal" TEXT NOT NULL,
     "milestoneDescription" TEXT NOT NULL,
     "deadlineBlock" INTEGER NOT NULL,
+    "deadlineAt" DATETIME,
     "disputeWindowBlocks" INTEGER NOT NULL DEFAULT 144,
     "builderAddress" TEXT NOT NULL,
     "treasuryAddress" TEXT NOT NULL,

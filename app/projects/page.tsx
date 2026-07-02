@@ -1,8 +1,9 @@
 import { Nav } from "@/src/components/Nav";
 import Link from "next/link";
 import { db } from "@/src/lib/db";
-import { getExplorerTxUrl } from "@/src/lib/flowvault";
 import { GuidedTour, type TourStep } from "@/src/components/GuidedTour";
+import { formatUsdcx } from "@/src/lib/units";
+import { formatDeadline } from "@/src/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -48,10 +49,11 @@ export default async function ProjectsList() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {projects.map((p) => {
-              const raised = p.contributions.reduce((sum, c) => sum + BigInt(c.amount), BigInt(0));
+              const activeContribs = p.contributions.filter((c) => c.status !== "WITHDRAWN");
+              const raised = activeContribs.reduce((sum, c) => sum + BigInt(c.amount), BigInt(0));
               const goal = BigInt(p.fundingGoal);
               const pct = goal > BigInt(0) ? Number((raised * BigInt(100)) / goal) : 0;
-              const deadlineLabel = `Block ${p.deadlineBlock}`;
+              const deadlineLabel = formatDeadline(p.deadlineAt as any, p.deadlineBlock);
 
               return (
                 <Link key={p.id} href={`/projects/${p.id}`} className="group">
@@ -68,7 +70,7 @@ export default async function ProjectsList() {
                       <div>
                         <div className="flex justify-between text-xs mb-1.5 font-label-caps text-[var(--on-surface-variant)]">
                           <span>FUNDING</span>
-                          <span>{(Number(raised) / 1e6).toFixed(0)}k / {(Number(goal) / 1e6).toFixed(0)}k USDCx</span>
+                          <span>{formatUsdcx(raised.toString())} / {formatUsdcx(goal.toString())} USDCx</span>
                         </div>
                         <div className="progress-bar"><div className="progress-fill" style={{ width: `${Math.min(pct, 100)}%` }} /></div>
                       </div>
