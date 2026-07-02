@@ -83,6 +83,8 @@ CREATE TABLE "PayrollVault" (
     "totalBudget" TEXT NOT NULL,
     "intervalAmount" TEXT NOT NULL,
     "releasedAmount" TEXT NOT NULL DEFAULT '0',
+    "depositTxid" TEXT,
+    "depositExplorerUrl" TEXT,
     "startBlock" INTEGER NOT NULL DEFAULT 0,
     "endBlock" INTEGER NOT NULL DEFAULT 0,
     "lastReleasedBlock" INTEGER,
@@ -112,6 +114,8 @@ CREATE TABLE "ReputationVault" (
     "totalAmount" TEXT NOT NULL,
     "lockUntilBlock" INTEGER NOT NULL DEFAULT 0,
     "status" TEXT NOT NULL DEFAULT 'OPEN',
+    "depositTxid" TEXT,
+    "depositExplorerUrl" TEXT,
     "pooledTxid" TEXT,
     "resolvedTxid" TEXT,
     "resolvedExplorerUrl" TEXT,
@@ -150,6 +154,8 @@ CREATE TABLE "InsuranceContribution" (
     "poolId" TEXT NOT NULL,
     "principal" TEXT NOT NULL,
     "amount" TEXT NOT NULL,
+    "depositTxid" TEXT,
+    "depositExplorerUrl" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "InsuranceContribution_poolId_fkey" FOREIGN KEY ("poolId") REFERENCES "InsurancePool" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );

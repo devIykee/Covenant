@@ -15,6 +15,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   if (BigInt(total) === BigInt(0)) return NextResponse.json({ error: "No contributions" }, { status: 400 });
 
+  // Judges must be appointed by investors before funds can be locked.
+  let appointedJudges: string[] = [];
+  try {
+    appointedJudges = JSON.parse((project as any).judges || "[]");
+  } catch {
+    appointedJudges = [];
+  }
+  if (appointedJudges.length === 0) {
+    return NextResponse.json({ error: "Investors must appoint at least one judge before pooling." }, { status: 400 });
+  }
+
   // Lock 100% until deadline + dispute window
   const lockUntil = project.deadlineBlock + (project.disputeWindowBlocks || 144);
 

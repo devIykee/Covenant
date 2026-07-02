@@ -10,7 +10,7 @@ const ADDR = /^S[TP][0-9A-Z]{38,40}$/;
 // Create a payroll vault. Amounts arrive as whole USDCx and are stored as micro (6dp).
 export async function POST(req: NextRequest) {
   try {
-    const { payerAddress, contributorAddress, totalBudget, intervalAmount } = await req.json();
+    const { payerAddress, contributorAddress, totalBudget, intervalAmount, depositTxid, depositExplorerUrl } = await req.json();
 
     if (!ADDR.test(contributorAddress || "")) {
       return NextResponse.json({ error: "Enter a valid contributor Stacks address (ST…)." }, { status: 400 });
@@ -33,6 +33,8 @@ export async function POST(req: NextRequest) {
         totalBudget: budgetMicro,
         intervalAmount: intervalMicro,
         releasedAmount: "0",
+        depositTxid: typeof depositTxid === "string" ? depositTxid : null,
+        depositExplorerUrl: typeof depositExplorerUrl === "string" ? depositExplorerUrl : null,
         startBlock,
         endBlock: 0,
         status: "ACTIVE",

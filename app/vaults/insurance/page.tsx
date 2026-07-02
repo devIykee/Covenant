@@ -4,6 +4,7 @@ import { Nav } from "@/src/components/Nav";
 import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
+import { depositUsdcxToCustodian, toMicroUsdcx } from "@/src/lib/deposit";
 
 interface Contribution { id: string; principal: string; amount: string }
 interface Pool {
@@ -47,12 +48,24 @@ export default function InsuranceVaultPage() {
     const p = premium[id] || { principal: myAddr, amount: "2" };
     setBusy(id);
     try {
-      const res = await fetch(`/api/insurance/${id}/contribute`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(p) });
+      // Member pays the premium up front: real USDCx deposit to the custodian.
+      toast.info("Approve the premium payment in your wallet…");
+      const dep = await depositUsdcxToCustodian(toMicroUsdcx(p.amount));
+      toast.success(`Premium paid. TX ${dep.txid.slice(0, 10)}…`);
+
+      const res = await fetch(`/api/insurance/${id}/contribute`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...p, principal: dep.sender, depositTxid: dep.txid, depositExplorerUrl: dep.explorerUrl }),
+      });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || "Failed");
       toast.success("Premium added to pool.");
       await load();
-    } catch (e: any) { toast.error(e.message); } finally { setBusy(null); }
+    } catch (e: any) {
+      if (/reject|cancel|deny/i.test(e?.message || "")) toast.error("Payment cancelled.");
+      else toast.error(e.message);
+    } finally { setBusy(null); }
   }
 
   async function resolve(id: string, triggered: boolean) {

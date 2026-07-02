@@ -9,7 +9,7 @@ const ADDR = /^S[TP][0-9A-Z]{38,40}$/;
 // Record a premium contribution into the pool (tracked; the custodian holds the funds).
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { principal, amount } = await req.json();
+  const { principal, amount, depositTxid, depositExplorerUrl } = await req.json();
 
   if (!ADDR.test(principal || "")) return NextResponse.json({ error: "Enter a valid Stacks address." }, { status: 400 });
   const amt = Number(amount);

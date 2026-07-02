@@ -15,8 +15,7 @@ const CREATE_TOUR: TourStep[] = [
   { selector: "#tour-deadline", title: "Deadline", body: "Pick a calendar date. We convert it to a Stacks block height for the on-chain time-lock." },
   { selector: "#tour-builder", title: "Builder address (optional)", body: "The builder's Stacks address. Leave blank to use your connected wallet." },
   { selector: "#tour-treasury", title: "Treasury address", body: "Where the 80% builder payout is sent if the milestone succeeds." },
-  { selector: "#tour-judges", title: "Invite independent judges", body: "This is the trust anchor: invite 2–3 independent people to verify the milestone. Funds only release when 2 of them agree — so investors don't have to trust you alone." },
-  { selector: "#tour-submit", title: "Initialize the covenant", body: "Creates the on-ledger record. Next you'll share the custodian address for investors to fund it." },
+  { selector: "#tour-submit", title: "Publish the campaign", body: "Creates the campaign and lists it on the site. Investors deposit into escrow and then appoint the judges — you don't pick your own referees." },
 ];
 
 export default function CreateProject() {
@@ -33,11 +32,6 @@ export default function CreateProject() {
     builderAddress: "",
     treasuryAddress: "",
   });
-  const [judges, setJudges] = useState<string[]>(["", "", ""]);
-
-  const setJudge = (i: number, val: string) => {
-    setJudges((prev) => prev.map((j, idx) => (idx === i ? val.trim() : j)));
-  };
 
   // Estimate block height from date (testnet ~ 144 blocks/hour ~ 3456/day)
   const handleDateChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -67,14 +61,6 @@ export default function CreateProject() {
         throw new Error("All fields are required");
       }
 
-      const cleanJudges = judges.map((j) => j.trim()).filter(Boolean);
-      const badJudge = cleanJudges.find((j) => !/^S[TP][0-9A-Z]{38,40}$/.test(j));
-      if (badJudge) throw new Error(`"${badJudge.slice(0, 12)}…" is not a valid Stacks address`);
-      if (cleanJudges.length < 2) throw new Error("Invite at least 2 judges — investors trust independent verifiers, not you alone.");
-      if (form.builderAddress && cleanJudges.includes(form.builderAddress.trim())) {
-        throw new Error("A judge should be independent — don't list your own builder address as a judge.");
-      }
-
       // Convert goal to micro (assume USDCx has 6 decimals)
       const goalMicro = (parseFloat(form.fundingGoal) * 1_000_000).toString();
 
@@ -92,7 +78,6 @@ export default function CreateProject() {
           deadlineBlock: targetBlock,
           builderAddress: form.builderAddress || "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM", // fallback demo
           treasuryAddress: form.treasuryAddress || form.builderAddress || "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM",
-          judges: cleanJudges,
         }),
       });
 
@@ -239,37 +224,10 @@ export default function CreateProject() {
             </div>
           </section>
 
-          {/* Independent Verifiers (Judges) */}
-          <section id="tour-judges" className="card-container p-8 relative">
-            <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none text-6xl">⚖︎</div>
-            <h2 className="font-headline-md mb-2 flex items-center gap-2">
-              <span className="stamp-open rounded-full w-7 h-7 flex items-center justify-center text-[10px] mr-2">III</span>
-              INDEPENDENT VERIFIERS
-            </h2>
-            <p className="text-sm text-[var(--on-surface-variant)] mb-6 max-w-xl">
-              Invite trusted third parties to attest whether the milestone was met. This is what lets investors
-              fund you <strong className="text-[var(--ink)]">without fearing you&rsquo;ll run away</strong> — funds only release
-              when <strong className="text-[var(--ink)]">2 of your judges</strong> agree. Judges should be independent
-              (not your own address). Paste their Stacks addresses; share the covenant link with them to attest.
-            </p>
-
-            <div className="space-y-4">
-              {judges.map((j, i) => (
-                <div key={i}>
-                  <label className="block font-label-caps text-xs text-[var(--on-surface-variant)] mb-2">
-                    JUDGE {i + 1}{i < 2 ? " (required)" : " (optional)"}
-                  </label>
-                  <input
-                    value={j}
-                    onChange={(e) => setJudge(i, e.target.value)}
-                    className="input-line w-full px-4 py-3 font-data-sm"
-                    placeholder="ST... (a judge's Stacks address)"
-                  />
-                </div>
-              ))}
-            </div>
-            <p className="text-[11px] text-[var(--on-surface-variant)] mt-3">Invite at least 2. A 2-of-N majority is required to release funds.</p>
-          </section>
+          <div className="rounded-sm border border-[var(--ink)]/15 bg-[var(--surface-container-low)] p-4 text-sm text-[var(--on-surface-variant)]">
+            <span className="font-label-caps text-[10px] text-[var(--ink)]">HOW JUDGING WORKS</span>
+            <p className="mt-1">You don&rsquo;t pick the judges — that would let you approve your own work. After investors deposit into escrow, <strong className="text-[var(--ink)]">they</strong> appoint the judges who verify your milestone. Funds release only when the appointed judges attest.</p>
+          </div>
 
           <div className="pt-6 border-t border-[var(--ink)]/20 flex flex-col items-center text-center">
             <p className="text-sm text-[var(--on-surface-variant)] max-w-md mb-6">

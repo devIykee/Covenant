@@ -137,11 +137,11 @@ export default function DocsPage() {
                   It calls <code className="font-data-sm">set-routing-rules</code> + <code className="font-data-sm">deposit</code>,
                   locking 100% until the deadline block. This is the real on-chain programmable behavior.
                 </Step>
-                <Step n={3} title="Invited judges attest the outcome (2-of-N multisig)">
-                  When you create a covenant you <strong className="text-[var(--ink)]">invite independent judges by address</strong>.
-                  Each judge opens the covenant link, connects their wallet, and <strong className="text-[var(--ink)]">cryptographically signs</strong> their
-                  &ldquo;met&rdquo; / &ldquo;not met&rdquo; vote — the server verifies the signature against their address, so no one
-                  can vote on their behalf. Once 2-of-N sign MET, a dispute window opens before funds move.
+                <Step n={3} title="Investors appoint judges, who attest (2-of-N multisig)">
+                  The builder <strong className="text-[var(--ink)]">cannot pick the judges</strong> — that would be judging their own work.
+                  After investors deposit, <strong className="text-[var(--ink)]">they</strong> appoint the judges (an investor may appoint themselves).
+                  Each judge connects their wallet and <strong className="text-[var(--ink)]">cryptographically signs</strong> their &ldquo;met&rdquo; / &ldquo;not met&rdquo;
+                  vote; the server verifies the signature against their address. Once 2-of-N sign MET, a dispute window opens before funds move.
                 </Step>
                 <Step n={4} title="The custodian withdraws and distributes">
                   After the lock passes, it calls <code className="font-data-sm">withdraw</code> and sends tracked

@@ -4,6 +4,7 @@ import { Nav } from "@/src/components/Nav";
 import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
+import { depositUsdcxToCustodian, toMicroUsdcx } from "@/src/lib/deposit";
 
 interface CheckIn {
   id: string;
@@ -50,10 +51,15 @@ export default function PayrollVaultPage() {
   async function create() {
     setLoading(true);
     try {
+      // Payer funds the budget up front: a real USDCx deposit to the custodian.
+      toast.info("Approve the budget deposit in your wallet…");
+      const dep = await depositUsdcxToCustodian(toMicroUsdcx(form.totalBudget));
+      toast.success(`Budget deposited. TX ${dep.txid.slice(0, 10)}…`);
+
       const res = await fetch("/api/payroll", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, payerAddress: dep.sender, depositTxid: dep.txid, depositExplorerUrl: dep.explorerUrl }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to create");
@@ -61,7 +67,8 @@ export default function PayrollVaultPage() {
       setForm((f) => ({ ...f, contributorAddress: "" }));
       await load();
     } catch (e: any) {
-      toast.error(e.message);
+      if (/reject|cancel|deny/i.test(e?.message || "")) toast.error("Deposit cancelled.");
+      else toast.error(e.message);
     } finally {
       setLoading(false);
     }

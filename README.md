@@ -273,7 +273,7 @@ Every vault type executes real on-chain USDCx transfers through the shared escro
 
 ## Judge Attestation (trustless)
 
-Judges are **invited per-project by the builder** (independent verifiers, not the builder). Each judge opens the covenant's invite link, connects their wallet, and **cryptographically signs** their MET/NOT-MET vote with `@stacks/connect`. The server **verifies the signature** (`@stacks/encryption` `verifyMessageSignatureRsv`) against the judge's address before recording it, and only invited judges count toward the 2-of-N threshold. A tampered vote fails verification.
+**The builder cannot pick the judges** — that would be judging their own work. Judges are **appointed by investors after they deposit** (an investor may appoint themselves); the builder is blocked, and a covenant cannot be pooled/locked until judges are appointed. Each judge connects their wallet and **cryptographically signs** their MET/NOT-MET vote with `@stacks/connect`. The server **verifies the signature** (`@stacks/encryption` `verifyMessageSignatureRsv`) against the judge's address before recording it, and only appointed judges count toward the 2-of-N threshold. A tampered vote fails verification.
 
 ## Tech
 

@@ -10,7 +10,7 @@ const ADDR = /^S[TP][0-9A-Z]{38,40}$/;
 // participant's reputation score (equal split if nobody has a score yet).
 export async function POST(req: NextRequest) {
   try {
-    const { title, totalAmount, participants } = await req.json();
+    const { title, totalAmount, participants, depositTxid, depositExplorerUrl } = await req.json();
 
     const list: string[] = Array.isArray(participants)
       ? Array.from(new Set(participants.map((p: string) => (p || "").trim()).filter((p: string) => ADDR.test(p))))
@@ -44,6 +44,8 @@ export async function POST(req: NextRequest) {
         title,
         totalAmount: BigInt(Math.round(amount * 1_000_000)).toString(),
         status: "OPEN",
+        depositTxid: typeof depositTxid === "string" ? depositTxid : null,
+        depositExplorerUrl: typeof depositExplorerUrl === "string" ? depositExplorerUrl : null,
         participants: {
           create: list.map((principal, i) => ({
             principal,

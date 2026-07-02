@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
+import { depositUsdcxToCustodian, toMicroUsdcx } from "@/src/lib/deposit";
 
 interface Participant {
   principal: string;
@@ -52,10 +53,15 @@ export function ReputationManager({ scores }: { scores: Record<string, number> }
   async function create() {
     setLoading(true);
     try {
+      // Fund the pool up front: real USDCx deposit to the custodian.
+      toast.info("Approve the pool deposit in your wallet…");
+      const dep = await depositUsdcxToCustodian(toMicroUsdcx(amount));
+      toast.success(`Pool deposited. TX ${dep.txid.slice(0, 10)}…`);
+
       const res = await fetch("/api/reputation", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, totalAmount: amount, participants: addrs }),
+        body: JSON.stringify({ title, totalAmount: amount, participants: addrs, depositTxid: dep.txid, depositExplorerUrl: dep.explorerUrl }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed");
@@ -63,7 +69,8 @@ export function ReputationManager({ scores }: { scores: Record<string, number> }
       setAddrs(["", "", ""]);
       await load();
     } catch (e: any) {
-      toast.error(e.message);
+      if (/reject|cancel|deny/i.test(e?.message || "")) toast.error("Deposit cancelled.");
+      else toast.error(e.message);
     } finally {
       setLoading(false);
     }

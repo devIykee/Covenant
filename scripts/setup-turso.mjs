@@ -94,6 +94,12 @@ const MIGRATIONS = [
   `ALTER TABLE "InsurancePool" ADD COLUMN "resolvedExplorerUrl" TEXT`,
   `ALTER TABLE "InsurancePool" ADD COLUMN "payouts" TEXT NOT NULL DEFAULT '[]'`,
   `ALTER TABLE "InsuranceContribution" ADD COLUMN "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP`,
+  `ALTER TABLE "PayrollVault" ADD COLUMN "depositTxid" TEXT`,
+  `ALTER TABLE "PayrollVault" ADD COLUMN "depositExplorerUrl" TEXT`,
+  `ALTER TABLE "ReputationVault" ADD COLUMN "depositTxid" TEXT`,
+  `ALTER TABLE "ReputationVault" ADD COLUMN "depositExplorerUrl" TEXT`,
+  `ALTER TABLE "InsuranceContribution" ADD COLUMN "depositTxid" TEXT`,
+  `ALTER TABLE "InsuranceContribution" ADD COLUMN "depositExplorerUrl" TEXT`,
 ];
 
 async function runMigrations() {

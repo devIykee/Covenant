@@ -99,6 +99,8 @@ model PayrollVault {
   totalBudget       String
   intervalAmount    String
   releasedAmount    String   @default("0") // running total streamed to the contributor
+  depositTxid       String?  // payer's wallet deposit of the budget to the custodian
+  depositExplorerUrl String?
   startBlock        Int      @default(0)
   endBlock          Int      @default(0)
   lastReleasedBlock Int?
@@ -130,6 +132,8 @@ model ReputationVault {
   totalAmount       String
   lockUntilBlock    Int      @default(0)
   status            String @default("OPEN") // OPEN | DISTRIBUTED
+  depositTxid       String?  // creator's wallet deposit of the pool to the custodian
+  depositExplorerUrl String?
   pooledTxid        String?
   resolvedTxid      String?
   resolvedExplorerUrl String?
@@ -169,6 +173,8 @@ model InsuranceContribution {
   poolId        String
   principal     String
   amount        String
+  depositTxid   String?  // member's wallet premium deposit to the custodian
+  depositExplorerUrl String?
   createdAt     DateTime @default(now())
   pool          InsurancePool @relation(fields: [poolId], references: [id])
 }

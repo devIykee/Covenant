@@ -71,6 +71,8 @@ export default function ProjectDetail() {
   const [isAttesting, setIsAttesting] = useState(false);
   const [pageUrl, setPageUrl] = useState("");
   const [linkCopied, setLinkCopied] = useState(false);
+  const [judgeInput, setJudgeInput] = useState("");
+  const [isAppointing, setIsAppointing] = useState(false);
 
   const projectId = params.id;
 
@@ -84,6 +86,31 @@ export default function ProjectDetail() {
     }
   })();
   const youAreJudge = !!connectedAddr && invitedJudges.includes(connectedAddr);
+  const youAreInvestor = !!connectedAddr && contributions.some((c) => c.principal === connectedAddr);
+  const canAppointJudges = youAreInvestor && ["CREATED", "BACKING_OPEN"].includes(project?.status || "");
+
+  async function handleAppointJudges(addresses: string[]) {
+    if (!connectedAddr) { toast.error("Connect your wallet."); return; }
+    const clean = addresses.map((a) => a.trim()).filter(Boolean);
+    if (clean.length === 0) { toast.error("Enter a judge address."); return; }
+    setIsAppointing(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/judges`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ investor: connectedAddr, judges: clean }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to appoint judges");
+      toast.success("Judge(s) appointed.");
+      setJudgeInput("");
+      await loadProject();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setIsAppointing(false);
+    }
+  }
 
   // Pick up the connected wallet + this page's shareable URL (the judge invite link).
   useEffect(() => {
@@ -442,12 +469,33 @@ export default function ProjectDetail() {
                       <div className="text-xs px-2 py-0.5 bg-[var(--surface-container-low)] text-[var(--ink)]">{metCount} MET</div>
                     </div>
                     <p className="text-[11px] text-[var(--on-surface-variant)] mb-4">
-                      Independent judges the builder invited. Funds only release when <strong className="text-[var(--ink)]">{threshold} of {invitedJudges.length || "N"}</strong> attest MET.
+                      Judges are appointed by <strong className="text-[var(--ink)]">investors</strong> (not the builder). Funds only release when <strong className="text-[var(--ink)]">{threshold} of {invitedJudges.length || "N"}</strong> attest MET.
                     </p>
+
+                    {/* Investors appoint judges (only investors, only before lock) */}
+                    {canAppointJudges && (
+                      <div className="mb-4 border border-[var(--ink)]/15 rounded-sm p-3 bg-[var(--surface-container-low)]">
+                        <div className="font-label-caps text-[10px] text-[var(--on-surface-variant)] mb-1.5">APPOINT A JUDGE (INVESTORS ONLY)</div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            value={judgeInput}
+                            onChange={(e) => setJudgeInput(e.target.value)}
+                            placeholder="ST… judge address"
+                            className="flex-1 min-w-0 bg-transparent border border-[var(--ink)]/15 rounded px-2 py-1.5 text-xs font-data-sm"
+                          />
+                          <button type="button" disabled={isAppointing} onClick={() => handleAppointJudges([judgeInput])} className="btn-primary text-[10px] px-3 py-1.5 shrink-0 disabled:opacity-50">ADD</button>
+                        </div>
+                        <button type="button" disabled={isAppointing || (!!connectedAddr && invitedJudges.includes(connectedAddr))} onClick={() => handleAppointJudges([connectedAddr as string])} className="mt-2 text-[10px] underline text-[var(--on-surface-variant)] hover:text-[var(--ink)] disabled:opacity-40">
+                          + Add myself as a judge
+                        </button>
+                      </div>
+                    )}
 
                     {invitedJudges.length === 0 ? (
                       <div className="text-sm text-[var(--on-surface-variant)] border border-dashed border-[var(--ink)]/20 rounded p-4">
-                        No judges were invited for this covenant, so its outcome can&rsquo;t be independently verified.
+                        {youAreInvestor
+                          ? "No judges appointed yet — add the judges who will verify this milestone above."
+                          : "No judges appointed yet. After you invest, you can appoint the judges who verify this milestone."}
                       </div>
                     ) : (
                       <>
@@ -577,20 +625,35 @@ export default function ProjectDetail() {
         <div id="tour-actions" className="border border-[var(--ink)]/10 p-6 bg-white dark:bg-[#121720] dark:border-white/10 mb-8">
           <div className="font-label-caps text-xs mb-3">CUSTODIAN ACTIONS (PRIMARY FLOW)</div>
 
-          <div className="flex flex-wrap gap-3 mb-3">
-            <button 
-              onClick={async () => {
-                const r = await fetch(`/api/projects/${projectId}/pool`, { method: "POST" });
-                const d = await r.json();
-                if (r.ok) { toast.success("Pooled to FlowVault"); window.open(d.explorerUrl, "_blank"); }
-                else toast.error(d.error);
-                await loadProject();
-              }} 
-              className="btn-secondary text-sm py-2">POOL INTO FLOWVAULT (LOCK 100%)</button>
+          {(() => {
+            const poolBlockReason =
+              contributions.length === 0
+                ? "No investors have deposited yet."
+                : invitedJudges.length === 0
+                ? "Investors must appoint at least one judge before pooling."
+                : "";
+            return (
+              <>
+                <div className="flex flex-wrap gap-3 mb-3">
+                  <button
+                    disabled={!!poolBlockReason}
+                    title={poolBlockReason}
+                    onClick={async () => {
+                      const r = await fetch(`/api/projects/${projectId}/pool`, { method: "POST" });
+                      const d = await r.json();
+                      if (r.ok) { toast.success("Pooled to FlowVault"); window.open(d.explorerUrl, "_blank"); }
+                      else toast.error(d.error);
+                      await loadProject();
+                    }}
+                    className="btn-secondary text-sm py-2 disabled:opacity-40">POOL INTO FLOWVAULT (LOCK 100%)</button>
 
-            <button onClick={() => handleResolve(true)} className="btn-primary text-sm py-2">RESOLVE SUCCESS — 80% BUILDER / 20% PRO-RATA</button>
-            <button onClick={() => handleResolve(false)} className="btn-secondary text-sm py-2">RESOLVE FAILURE — 100% REFUND</button>
-          </div>
+                  <button onClick={() => handleResolve(true)} className="btn-primary text-sm py-2">RESOLVE SUCCESS — 80% BUILDER / 20% PRO-RATA</button>
+                  <button onClick={() => handleResolve(false)} className="btn-secondary text-sm py-2">RESOLVE FAILURE — 100% REFUND</button>
+                </div>
+                {poolBlockReason && <p className="text-xs mb-1 text-[var(--signet)]">{poolBlockReason}</p>}
+              </>
+            );
+          })()}
 
           <p className="text-xs mt-1 text-[var(--on-surface-variant)]">Pool executes set-routing-rules + deposit on custodian vault. Resolution calls withdraw then distributes. All txs logged.</p>
 
