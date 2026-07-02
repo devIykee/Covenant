@@ -8,7 +8,7 @@ export default function ReputationVault() {
       <Nav />
       <main className="max-w-[1200px] mx-auto px-6 py-12">
         <h1 className="font-headline-md mb-2">Reputation-Weighted Vault</h1>
-        <p className="text-sm text-[#424848]">Split % auto-computed from on-chain reputation scores of participants (+1 per successful resolution).</p>
+        <p className="text-sm text-[var(--on-surface-variant)]">Split % auto-computed from on-chain reputation scores of participants (+1 per successful resolution).</p>
 
         <div className="mt-8 card-container p-6">
           <div>Leaderboard (live from DB):</div>

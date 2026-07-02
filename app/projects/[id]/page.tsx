@@ -317,9 +317,9 @@ export default function ProjectDetail() {
       <main className="flex-grow max-w-[1200px] mx-auto w-full px-6 py-8">
         <div className="mb-6 flex items-start justify-between">
           <div>
-            <div className="text-xs font-label-caps text-[#424848]">AGREEMENT ID: {project.id.slice(0, 12).toUpperCase()}</div>
+            <div className="text-xs font-label-caps text-[var(--on-surface-variant)]">AGREEMENT ID: {project.id.slice(0, 12).toUpperCase()}</div>
             <h1 className="font-display-lg text-3xl md:text-[32px] tracking-tight">{project.title}</h1>
-            <p className="text-[#424848] mt-1">Builder: <span className="font-data-sm text-[#0B1D1D]">{project.builderAddress.slice(0, 8)}...</span></p>
+            <p className="text-[var(--on-surface-variant)] mt-1">Builder: <span className="font-data-sm text-[var(--ink)]">{project.builderAddress.slice(0, 8)}...</span></p>
           </div>
           <div>
             <span className={
@@ -336,15 +336,15 @@ export default function ProjectDetail() {
         {/* Bento: Timeline + Vault + Judges */}
         <div className="grid md:grid-cols-12 gap-6 mb-10">
           {/* Timeline */}
-          <div className="md:col-span-4 border border-[#0B1D1D]/10 p-6 bg-white dark:bg-[#121720] dark:border-white/10">
-            <div className="font-label-caps text-xs text-[#424848] mb-4">AGREEMENT TIMELINE</div>
+          <div className="md:col-span-4 border border-[var(--ink)]/10 p-6 bg-white dark:bg-[#121720] dark:border-white/10">
+            <div className="font-label-caps text-xs text-[var(--on-surface-variant)] mb-4">AGREEMENT TIMELINE</div>
             <div className="space-y-6 relative pl-5">
               {timelineSteps.map((step, idx) => (
                 <div key={idx} className="timeline-item flex gap-3">
                   <div className={`timeline-dot mt-1 ${idx <= currentStatusIdx ? "active" : ""}`} />
                   <div className="text-sm">
-                    <div className={idx <= currentStatusIdx ? "font-medium" : "text-[#424848]"}>{step.label}</div>
-                    <div className="font-data-sm text-xs text-[#424848]">
+                    <div className={idx <= currentStatusIdx ? "font-medium" : "text-[var(--on-surface-variant)]"}>{step.label}</div>
+                    <div className="font-data-sm text-xs text-[var(--on-surface-variant)]">
                       {idx === 2 && project.pooledTxid ? <a href={project.pooledExplorerUrl} target="_blank" className="explorer-link underline">TX logged</a> : "—"}
                     </div>
                   </div>
@@ -355,35 +355,35 @@ export default function ProjectDetail() {
 
           {/* Vault + Judges */}
           <div className="md:col-span-8 flex flex-col gap-6">
-            <div className="border border-[#0B1D1D]/10 p-6 bg-white dark:bg-[#121720] dark:border-white/10 flex flex-col md:flex-row gap-4">
+            <div className="border border-[var(--ink)]/10 p-6 bg-white dark:bg-[#121720] dark:border-white/10 flex flex-col md:flex-row gap-4">
               <div className="flex-1">
-                <div className="font-label-caps text-xs text-[#424848]">LIVE VAULT BALANCE (CUSTODIAN)</div>
+                <div className="font-label-caps text-xs text-[var(--on-surface-variant)]">LIVE VAULT BALANCE (CUSTODIAN)</div>
                 <div className="text-3xl font-data-lg mt-1 tracking-tight">
                   {vaultState?.unlocked ? (Number(vaultState.unlocked) / 1e6).toFixed(0) : raisedDisplay} USDCx
                 </div>
-                <div className="text-xs text-[#424848] mt-1">Locked: {vaultState?.locked ? (Number(vaultState.locked)/1e6).toFixed(0) : "—"}</div>
+                <div className="text-xs text-[var(--on-surface-variant)] mt-1">Locked: {vaultState?.locked ? (Number(vaultState.locked)/1e6).toFixed(0) : "—"}</div>
               </div>
               <div className="min-w-[260px]">
-                <div className="font-label-caps text-xs text-[#424848] flex items-center gap-2">
+                <div className="font-label-caps text-xs text-[var(--on-surface-variant)] flex items-center gap-2">
                   CUSTODIAN ADDRESS
                   <button 
                     onClick={copyCustodian} 
-                    className="text-[10px] px-1.5 py-px rounded border border-[#0B1D1D]/20 hover:bg-[#0B1D1D]/5 flex items-center gap-1"
+                    className="text-[10px] px-1.5 py-px rounded border border-[var(--ink)]/20 hover:bg-[var(--ink)]/5 flex items-center gap-1"
                     title="Copy address"
                   >
                     {copiedCustodian ? 'COPIED!' : 'COPY'}
                   </button>
                 </div>
-                <div className="font-data-sm bg-[#F0F3FF] dark:bg-[#1a202e] px-2 py-1 text-[#0B1D1D] dark:text-[#e8ebf5] inline-block mt-1 break-all text-[11px]">
+                <div className="font-data-sm bg-[var(--surface-container-low)] dark:bg-[#1a202e] px-2 py-1 text-[var(--ink)] dark:text-[#e8ebf5] inline-block mt-1 break-all text-[11px]">
                   {custodianAddress}
-                  <a href={`https://explorer.hiro.so/address/${custodianAddress}?chain=testnet`} target="_blank" className="ml-2 inline text-[#424848] hover:text-[#0B1D1D]">↗</a>
+                  <a href={`https://explorer.hiro.so/address/${custodianAddress}?chain=testnet`} target="_blank" className="ml-2 inline text-[var(--on-surface-variant)] hover:text-[var(--ink)]">↗</a>
                 </div>
 
                 <div className="mt-2 flex items-center gap-2">
                   <button 
                     onClick={checkCustodianBalance} 
                     disabled={isCheckingBalance}
-                    className="text-[10px] px-2 py-1 border border-[#0B1D1D]/20 rounded hover:bg-[#0B1D1D]/5 disabled:opacity-60"
+                    className="text-[10px] px-2 py-1 border border-[var(--ink)]/20 rounded hover:bg-[var(--ink)]/5 disabled:opacity-60"
                   >
                     {isCheckingBalance ? 'CHECKING...' : 'CHECK BALANCE'}
                   </button>
@@ -395,10 +395,10 @@ export default function ProjectDetail() {
             </div>
 
             {/* Judge Attestation Panel (matches design) */}
-            <div className="border border-[#0B1D1D]/10 p-6 bg-white dark:bg-[#121720] dark:border-white/10">
+            <div className="border border-[var(--ink)]/10 p-6 bg-white dark:bg-[#121720] dark:border-white/10">
               <div className="flex justify-between mb-4">
-                <div className="font-label-caps text-xs text-[#424848]">JUDGE ATTESTATION STATUS (2-of-3)</div>
-                <div className="text-xs px-2 py-0.5 bg-[#F0F3FF] text-[#0B1D1D]">{attestations.length} / 3</div>
+                <div className="font-label-caps text-xs text-[var(--on-surface-variant)]">JUDGE ATTESTATION STATUS (2-of-3)</div>
+                <div className="text-xs px-2 py-0.5 bg-[var(--surface-container-low)] text-[var(--ink)]">{attestations.length} / 3</div>
               </div>
 
               <div className="space-y-1 text-sm mb-6">
@@ -407,7 +407,7 @@ export default function ProjectDetail() {
                   return (
                     <div key={i} className="flex justify-between py-2 rule-line-minor items-center text-xs">
                       <span className="font-data-sm">{j.slice(0, 12)}...</span>
-                      <span className={att ? "text-[#B79438] font-medium" : "text-[#424848]"}>
+                      <span className={att ? "text-[var(--brass)] font-medium" : "text-[var(--on-surface-variant)]"}>
                         {att ? `ATTESTED (${att.vote})` : "PENDING"}
                       </span>
                     </div>
@@ -419,20 +419,20 @@ export default function ProjectDetail() {
                 <button onClick={() => handleJudgeAttest("NOT_MET")} className="btn-secondary flex-1 text-sm py-2">ATTEST: NOT MET</button>
                 <button onClick={() => handleJudgeAttest("MET")} className="btn-primary flex-1 text-sm py-2">ATTEST: MET</button>
               </div>
-              <p className="text-[10px] text-[#424848] mt-3">Judge panel is demo-restricted. Real app verifies signatures server-side.</p>
+              <p className="text-[10px] text-[var(--on-surface-variant)] mt-3">Judge panel is demo-restricted. Real app verifies signatures server-side.</p>
             </div>
           </div>
         </div>
 
         {/* Back this project section */}
         {project.status === "CREATED" || project.status === "BACKING_OPEN" ? (
-          <div className="border border-[#0B1D1D]/10 p-6 mb-8 max-w-lg">
+          <div className="border border-[var(--ink)]/10 p-6 mb-8 max-w-lg">
             <div className="font-label-caps text-xs mb-2">TRANSACTION SETUP</div>
             <h3 className="font-headline-md mb-4">Back this Covenant</h3>
 
             <div className="mb-4">
               <div className="text-xs font-label-caps mb-1">SEND USDCx TO CUSTODIAN</div>
-              <div className="font-data-sm break-all bg-[#F0F3FF] p-2 text-sm">{custodianAddress}</div>
+              <div className="font-data-sm break-all bg-[var(--surface-container-low)] p-2 text-sm">{custodianAddress}</div>
             </div>
 
             <label className="text-xs font-label-caps block mb-1">CONTRIBUTION AMOUNT (USDCx)</label>
@@ -446,19 +446,19 @@ export default function ProjectDetail() {
             <button onClick={handleBackProject} disabled={isBacking} className="btn-primary w-full disabled:opacity-60">
               {isBacking ? "RECORDING..." : "RECORD CONTRIBUTION"}
             </button>
-            <p className="text-[10px] mt-3 text-[#424848]">After recording, perform a standard USDCx SIP-010 transfer to the custodian. Paste txid if prompted in future.</p>
+            <p className="text-[10px] mt-3 text-[var(--on-surface-variant)]">After recording, perform a standard USDCx SIP-010 transfer to the custodian. Paste txid if prompted in future.</p>
           </div>
         ) : null}
 
         {/* Backer Ledger */}
-        <div className="border border-[#0B1D1D]/10 mb-8 overflow-hidden">
-          <div className="p-4 bg-white dark:bg-[#121720] border-b border-[#0B1D1D]/10 dark:border-white/10">
+        <div className="border border-[var(--ink)]/10 mb-8 overflow-hidden">
+          <div className="p-4 bg-white dark:bg-[#121720] border-b border-[var(--ink)]/10 dark:border-white/10">
             <div className="font-label-caps text-xs">BACKER LEDGER • {contributions.length} CONTRIBUTIONS</div>
           </div>
           <div className="overflow-x-auto bg-white dark:bg-[#121720]">
             <table className="w-full text-left data-table">
               <thead>
-                <tr className="border-b border-[#0B1D1D]/10 bg-[#F0F3FF]/40">
+                <tr className="border-b border-[var(--ink)]/10 bg-[var(--surface-container-low)]/40">
                   <th className="p-3 text-xs">PRINCIPAL</th>
                   <th className="p-3 text-xs text-right">AMOUNT (USDCx)</th>
                   <th className="p-3 text-xs text-right">TIMESTAMP</th>
@@ -466,12 +466,12 @@ export default function ProjectDetail() {
                 </tr>
               </thead>
               <tbody className="text-sm font-data-sm">
-                {contributions.length === 0 && <tr><td colSpan={4} className="p-8 text-center text-[#424848]">No backers yet.</td></tr>}
+                {contributions.length === 0 && <tr><td colSpan={4} className="p-8 text-center text-[var(--on-surface-variant)]">No backers yet.</td></tr>}
                 {contributions.map((c, idx) => (
-                  <tr key={idx} className="border-b border-[#0B1D1D]/10 hover:bg-[#F9F7F2]">
-                    <td className="p-3 font-mono text-xs text-[#0B1D1D]">{c.principal}</td>
+                  <tr key={idx} className="border-b border-[var(--ink)]/10 hover:bg-[var(--parchment)]">
+                    <td className="p-3 font-mono text-xs text-[var(--ink)]">{c.principal}</td>
                     <td className="p-3 text-right">{(Number(c.amount) / 1e6).toFixed(0)}</td>
-                    <td className="p-3 text-right text-[#424848] text-xs">{new Date().toISOString().slice(0, 16)}</td>
+                    <td className="p-3 text-right text-[var(--on-surface-variant)] text-xs">{new Date().toISOString().slice(0, 16)}</td>
                     <td className="p-3 text-center">
                       {c.depositExplorerUrl ? <a href={c.depositExplorerUrl} target="_blank" className="explorer-link">↗</a> : "—"}
                     </td>
@@ -483,7 +483,7 @@ export default function ProjectDetail() {
         </div>
 
         {/* Pool + Resolution Controls */}
-        <div className="border border-[#0B1D1D]/10 p-6 bg-white dark:bg-[#121720] dark:border-white/10 mb-8">
+        <div className="border border-[var(--ink)]/10 p-6 bg-white dark:bg-[#121720] dark:border-white/10 mb-8">
           <div className="font-label-caps text-xs mb-3">CUSTODIAN ACTIONS (PRIMARY FLOW)</div>
 
           <div className="flex flex-wrap gap-3 mb-3">
@@ -501,7 +501,7 @@ export default function ProjectDetail() {
             <button onClick={() => handleResolve(false)} className="btn-secondary text-sm py-2">RESOLVE FAILURE — 100% REFUND</button>
           </div>
 
-          <p className="text-xs mt-1 text-[#424848]">Pool executes set-routing-rules + deposit on custodian vault. Resolution calls withdraw then distributes. All txs logged.</p>
+          <p className="text-xs mt-1 text-[var(--on-surface-variant)]">Pool executes set-routing-rules + deposit on custodian vault. Resolution calls withdraw then distributes. All txs logged.</p>
 
           {project.pooledExplorerUrl && <a href={project.pooledExplorerUrl} target="_blank" className="text-xs underline block mt-1">Pooled tx: {project.pooledTxid?.slice(0,10)} ↗</a>}
           {project.withdrawExplorerUrl && (
@@ -511,7 +511,7 @@ export default function ProjectDetail() {
 
         {/* Milestone details */}
         <div className="text-sm">
-          <div className="font-label-caps text-xs text-[#424848]">MILESTONE</div>
+          <div className="font-label-caps text-xs text-[var(--on-surface-variant)]">MILESTONE</div>
           <div className="mt-1">{project.milestoneDescription}</div>
         </div>
       </main>

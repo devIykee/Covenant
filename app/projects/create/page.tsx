@@ -91,7 +91,7 @@ export default function CreateProject() {
       <main className="flex-grow w-full max-w-3xl mx-auto px-6 md:px-12 py-12">
         <div className="mb-12">
           <h1 className="font-display-lg-mobile md:font-display-lg text-3xl md:text-[32px] mb-2">Initialize Agreement</h1>
-          <p className="text-[#424848] font-body-lg border-b border-[#0B1D1D]/20 pb-6">
+          <p className="text-[var(--on-surface-variant)] font-body-lg border-b border-[var(--ink)]/20 pb-6">
             Draft a new notarized covenant. Ensure all terms are precisely defined before execution.
           </p>
         </div>
@@ -107,31 +107,31 @@ export default function CreateProject() {
 
             <div className="space-y-6">
               <div>
-                <label className="block font-label-caps text-xs text-[#424848] mb-2">COVENANT TITLE</label>
+                <label className="block font-label-caps text-xs text-[var(--on-surface-variant)] mb-2">COVENANT TITLE</label>
                 <input
                   value={form.title}
                   onChange={(e) => setForm({ ...form, title: e.target.value })}
-                  className="input-line w-full px-4 py-3 font-data-lg text-lg placeholder:text-[#424848]/50"
+                  className="input-line w-full px-4 py-3 font-data-lg text-lg placeholder:text-[var(--on-surface-variant)]/50"
                   placeholder="e.g. Q3 Protocol Development"
                   required
                 />
               </div>
               <div>
-                <label className="block font-label-caps text-xs text-[#424848] mb-2">MILESTONE DESCRIPTION</label>
+                <label className="block font-label-caps text-xs text-[var(--on-surface-variant)] mb-2">MILESTONE DESCRIPTION</label>
                 <textarea
                   value={form.description}
                   onChange={(e) => setForm({ ...form, description: e.target.value })}
-                  className="input-line w-full px-4 py-3 font-body-md placeholder:text-[#424848]/50 resize-y min-h-[96px]"
+                  className="input-line w-full px-4 py-3 font-body-md placeholder:text-[var(--on-surface-variant)]/50 resize-y min-h-[96px]"
                   placeholder="Provide a detailed account of the deliverables..."
                   required
                 />
               </div>
               <div>
-                <label className="block font-label-caps text-xs text-[#424848] mb-2">MILESTONE DETAILS</label>
+                <label className="block font-label-caps text-xs text-[var(--on-surface-variant)] mb-2">MILESTONE DETAILS</label>
                 <textarea
                   value={form.milestoneDescription}
                   onChange={(e) => setForm({ ...form, milestoneDescription: e.target.value })}
-                  className="input-line w-full px-4 py-3 font-body-md placeholder:text-[#424848]/50 resize-y"
+                  className="input-line w-full px-4 py-3 font-body-md placeholder:text-[var(--on-surface-variant)]/50 resize-y"
                   rows={3}
                   placeholder="Detailed acceptance criteria for milestone attestation..."
                   required
@@ -150,7 +150,7 @@ export default function CreateProject() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div>
-                <label className="block font-label-caps text-xs text-[#424848] mb-2">FUNDING GOAL (USDCx)</label>
+                <label className="block font-label-caps text-xs text-[var(--on-surface-variant)] mb-2">FUNDING GOAL (USDCx)</label>
                 <div className="relative">
                   <input
                     type="number"
@@ -161,12 +161,12 @@ export default function CreateProject() {
                     placeholder="250000.00"
                     required
                   />
-                  <div className="absolute right-4 top-3 text-xs text-[#424848] font-label-caps">USDCx</div>
+                  <div className="absolute right-4 top-3 text-xs text-[var(--on-surface-variant)] font-label-caps">USDCx</div>
                 </div>
               </div>
 
               <div>
-                <label className="block font-label-caps text-xs text-[#424848] mb-2">EXECUTION DEADLINE</label>
+                <label className="block font-label-caps text-xs text-[var(--on-surface-variant)] mb-2">EXECUTION DEADLINE</label>
                 <input
                   type="date"
                   value={form.deadlineDate}
@@ -174,15 +174,15 @@ export default function CreateProject() {
                   className="input-line w-full px-4 py-3 font-data-lg text-lg"
                   required
                 />
-                <p className="mt-1.5 font-data-sm text-xs text-[#424848]">
-                  Estimated Block Height: <span className="font-bold text-[#0B1D1D]">{estimatedBlock ?? "—"}</span>
+                <p className="mt-1.5 font-data-sm text-xs text-[var(--on-surface-variant)]">
+                  Estimated Block Height: <span className="font-bold text-[var(--ink)]">{estimatedBlock ?? "—"}</span>
                 </p>
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-6">
               <div>
-                <label className="block font-label-caps text-xs text-[#424848] mb-2">BUILDER PRINCIPAL (OPTIONAL)</label>
+                <label className="block font-label-caps text-xs text-[var(--on-surface-variant)] mb-2">BUILDER PRINCIPAL (OPTIONAL)</label>
                 <input
                   value={form.builderAddress}
                   onChange={(e) => setForm({ ...form, builderAddress: e.target.value })}
@@ -191,7 +191,7 @@ export default function CreateProject() {
                 />
               </div>
               <div>
-                <label className="block font-label-caps text-xs text-[#424848] mb-2">TREASURY ADDRESS</label>
+                <label className="block font-label-caps text-xs text-[var(--on-surface-variant)] mb-2">TREASURY ADDRESS</label>
                 <input
                   value={form.treasuryAddress}
                   onChange={(e) => setForm({ ...form, treasuryAddress: e.target.value })}
@@ -202,15 +202,15 @@ export default function CreateProject() {
             </div>
           </section>
 
-          <div className="pt-6 border-t border-[#0B1D1D]/20 flex flex-col items-center text-center">
-            <p className="text-sm text-[#424848] max-w-md mb-6">
+          <div className="pt-6 border-t border-[var(--ink)]/20 flex flex-col items-center text-center">
+            <p className="text-sm text-[var(--on-surface-variant)] max-w-md mb-6">
               By initializing this covenant, you agree to secure the stated funds in escrow until the defined milestones are cryptographically verified.
             </p>
 
             <button type="submit" disabled={loading} className="btn-primary w-full md:w-auto px-12 disabled:opacity-50">
               {loading ? "INITIALIZING ON LEDGER..." : "INITIALIZE COVENANT"}
             </button>
-            <button type="button" onClick={() => router.back()} className="mt-4 text-xs text-[#424848] underline">CANCEL DRAFT</button>
+            <button type="button" onClick={() => router.back()} className="mt-4 text-xs text-[var(--on-surface-variant)] underline">CANCEL DRAFT</button>
           </div>
         </form>
       </main>

@@ -175,7 +175,7 @@ body {
 }
 .progress-fill {
   height: 100%;
-  background-color: #0B1D1D;
+  background-color: var(--ink);
 }
 .progress-brass {
   background-color: #B79438;
@@ -192,7 +192,7 @@ body {
   top: 8px;
   bottom: -12px;
   width: 1px;
-  background: rgba(11, 29, 29, 0.2);
+  background: color-mix(in srgb, var(--ink) 20%, transparent);
 }
 .timeline-item:last-child::before {
   display: none;
@@ -200,18 +200,18 @@ body {
 .timeline-dot {
   width: 10px;
   height: 10px;
-  border: 2px solid #0B1D1D;
-  background: #F9F7F2;
+  border: 2px solid var(--ink);
+  background: var(--parchment);
   border-radius: 9999px;
 }
 .timeline-dot.active {
-  background: #0B1D1D;
+  background: var(--ink);
 }
 
 /* Buttons */
 .btn-primary {
-  background-color: #0B1D1D;
-  color: #F9F7F2;
+  background-color: var(--ink);
+  color: var(--parchment);
   font-family: var(--font-body);
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -221,11 +221,11 @@ body {
   transition: all 0.1s ease;
 }
 .btn-primary:hover {
-  background-color: rgba(11, 29, 29, 0.9);
+  opacity: 0.9;
 }
 .btn-secondary {
-  border: 1px solid #0B1D1D;
-  color: #0B1D1D;
+  border: 1px solid var(--ink);
+  color: var(--ink);
   background: transparent;
   font-family: var(--font-body);
   text-transform: uppercase;
@@ -236,8 +236,8 @@ body {
   transition: all 0.1s ease;
 }
 .btn-secondary:hover {
-  background-color: #0B1D1D;
-  color: #F9F7F2;
+  background-color: var(--ink);
+  color: var(--parchment);
 }
 
 /* Tables / ledgers */
@@ -260,7 +260,7 @@ body {
   transition: color 0.1s;
 }
 .explorer-link:hover {
-  color: #0B1D1D;
+  color: var(--ink);
 }
 
 /* Status badges */
@@ -288,8 +288,8 @@ body {
 
 /* Wallet connect button */
 .wallet-btn {
-  background-color: #0B1D1D;
-  color: #F9F7F2;
+  background-color: var(--ink);
+  color: var(--parchment);
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.08em;

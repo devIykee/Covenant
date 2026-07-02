@@ -39,6 +39,15 @@ All state changes and distributions are logged with txids + direct explorer link
 
 This satisfies bounty emphasis on "depth of use of FlowVault's programmable primitives" and "composability".
 
+## Contracts & Deployment
+
+**You do not deploy any custom smart contract.** Covenant consumes FlowVault's already-deployed testnet contracts:
+
+- FlowVault router: `STD7QG84VQQ0C35SZM2EYTHZV4M8FQ0R7YNSQWPD.flowvault-v2` — public functions `set-routing-rules`, `deposit`, `withdraw`, `clear-routing-rules` (verified live on testnet).
+- Token (SIP-010): `ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx` — standard `transfer` / `get-balance`.
+
+The only setup that resembles a "deployment" is **funding the escrow custodian account** (the wallet behind `STACKS_PRIVATE_KEY`) with testnet STX (gas) + USDCx so it can pool and distribute. See the in-app **[Docs page](/docs)** for a click-by-click beginner walkthrough.
+
 ## 🚀 Zero to Hero Guide (Even if you've never used Stacks before)
 
 This guide will take you from a completely blank machine to successfully creating, funding, and resolving a real conditional treasury on Stacks testnet — and seeing the on-chain transactions yourself.
@@ -95,11 +104,11 @@ DATABASE_URL="file:./dev.db"
 **Important**: The key stays only on your machine in `.env.local`. The frontend never sees it.
 
 ```bash
-npm run db:push
+npm run db:push   # syncs the SQLite schema (a pre-seeded dev.db is already included)
 npm run dev
 ```
 
-Open **http://localhost:3000**
+Open **http://localhost:3000** — or read the built-in **Docs** page at **http://localhost:3000/docs** for the full beginner walkthrough.
 
 **Pro tip**: Click the sun/moon icon in the nav to toggle **Dark Mode** (beautiful deep ledger theme included).
 
@@ -187,7 +196,7 @@ You have now completed a full conditional treasury cycle using real FlowVault pr
 - Transaction fails → Your wallet or the custodian has no USDCx. Use the testnet faucet again.
 - Page is blank or 500 → Just refresh. The dev server hot-reloads fixes automatically.
 - Address not showing after connect → Hard refresh the page (Cmd/Ctrl + Shift + R).
-- Dark mode looks off on some cards → It's a work-in-progress beauty, the core functionality is perfect.
+- Dark mode → Toggle the sun/moon icon in the nav. The choice is saved and applied before first paint (no flash) on every page.
 
 ### What Makes This Docs Amazing for Dummies
 
@@ -203,7 +212,7 @@ You have now completed a full conditional treasury cycle using real FlowVault pr
 - Transaction fails → Make sure the wallet has enough USDCx **and** the custodian address is funded.
 - Page shows 500 / Prisma error → The dev server hot-reloads fixes. Refresh or restart `npm run dev`.
 - Can't see your address → Click Connect again or check browser console.
-- Dark mode not pretty? Toggle it — it uses brand-appropriate deep colors.
+- `prisma db push` errors → make sure `DATABASE_URL` is set (the included `.env.example` has it); the URL lives in `prisma.config.ts` for Prisma 7.
 
 ### Useful Helpers Added for You (Zero Friction)
 

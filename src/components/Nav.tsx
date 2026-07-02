@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, useEffect } from "react";
-import { Wallet, Sun, Moon, Copy, Check } from "lucide-react";
+import { Wallet, Sun, Moon, Copy, Check, Menu, X } from "lucide-react";
 
 interface NavProps {
   showMyCovenants?: boolean;
@@ -13,6 +13,7 @@ export function Nav({ showMyCovenants = true }: NavProps) {
   const [address, setAddress] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [menuOpen, setMenuOpen] = useState(false);
 
   // Load saved address + theme on mount (auto-detect)
   useEffect(() => {
@@ -91,7 +92,7 @@ export function Nav({ showMyCovenants = true }: NavProps) {
         </Link>
 
         <div className="hidden md:flex items-center gap-8">
-          <Link href="/#vaults" className="font-label-caps text-xs tracking-[0.08em] text-[var(--on-surface-variant)] hover:text-[var(--ink)] transition-colors">
+          <Link href="/vaults" className="font-label-caps text-xs tracking-[0.08em] text-[var(--on-surface-variant)] hover:text-[var(--ink)] transition-colors">
             VAULTS
           </Link>
           {showMyCovenants && (
@@ -99,7 +100,7 @@ export function Nav({ showMyCovenants = true }: NavProps) {
               MY COVENANTS
             </Link>
           )}
-          <Link href="/#docs" className="font-label-caps text-xs tracking-[0.08em] text-[var(--on-surface-variant)] hover:text-[var(--ink)] transition-colors">
+          <Link href="/docs" className="font-label-caps text-xs tracking-[0.08em] text-[var(--on-surface-variant)] hover:text-[var(--ink)] transition-colors">
             DOCS
           </Link>
         </div>
@@ -112,6 +113,16 @@ export function Nav({ showMyCovenants = true }: NavProps) {
             aria-label="Toggle dark mode"
           >
             {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
+          </button>
+
+          {/* Mobile menu toggle */}
+          <button
+            onClick={() => setMenuOpen((o) => !o)}
+            className="md:hidden p-2 rounded hover:bg-[var(--ink)]/10 transition-colors text-[var(--ink)]"
+            aria-label="Toggle menu"
+            aria-expanded={menuOpen}
+          >
+            {menuOpen ? <X size={18} /> : <Menu size={18} />}
           </button>
 
           {/* Wallet Section */}
@@ -141,6 +152,23 @@ export function Nav({ showMyCovenants = true }: NavProps) {
           )}
         </div>
       </div>
+
+      {/* Mobile dropdown menu */}
+      {menuOpen && (
+        <div className="md:hidden border-t border-[var(--ink)]/10 bg-[var(--parchment)] px-6 py-4 flex flex-col gap-4">
+          <Link href="/vaults" onClick={() => setMenuOpen(false)} className="font-label-caps text-sm tracking-[0.08em] text-[var(--ink)]">
+            VAULTS
+          </Link>
+          {showMyCovenants && (
+            <Link href="/projects" onClick={() => setMenuOpen(false)} className="font-label-caps text-sm tracking-[0.08em] text-[var(--ink)]">
+              MY COVENANTS
+            </Link>
+          )}
+          <Link href="/docs" onClick={() => setMenuOpen(false)} className="font-label-caps text-sm tracking-[0.08em] text-[var(--ink)]">
+            DOCS
+          </Link>
+        </div>
+      )}
     </nav>
   );
 }

@@ -12,10 +12,9 @@
  * Conditional outcomes are enforced at the application layer.
  */
 
-import { createBackendVault, mapFlowVaultError, FLOWVAULT_CONTRACT_ADDRESS, FLOWVAULT_TOKEN_CONTRACT_ADDRESS, FLOWVAULT_TOKEN_CONTRACT_NAME } from "./flowvault";
+import { createBackendVault, mapFlowVaultError, FLOWVAULT_NETWORK, FLOWVAULT_CONTRACT_ADDRESS, FLOWVAULT_TOKEN_CONTRACT_ADDRESS, FLOWVAULT_TOKEN_CONTRACT_NAME } from "./flowvault";
 import { getExplorerTxUrl } from "./flowvault";
 import type { TransactionResult, VaultState, RoutingRules } from "flowvault-sdk";
-import { request } from "@stacks/connect"; // not used server-side
 
 // The custodian's own address (derived from STACKS_PRIVATE_KEY).
 // For demo we surface it in UI for users to send funds to.
@@ -31,9 +30,10 @@ export async function getCustodianAddress(): Promise<string> {
     return cachedCustodianAddress;
   }
 
-  // Derive STX address from private key
+  // Derive STX address from private key. IMPORTANT: pass the network so testnet
+  // yields the ST... form (the default is mainnet SP..., which would be wrong here).
   const { getAddressFromPrivateKey } = await import("@stacks/transactions");
-  const address = getAddressFromPrivateKey(privateKey);
+  const address = getAddressFromPrivateKey(privateKey, FLOWVAULT_NETWORK);
   cachedCustodianAddress = address;
   return address;
 }
@@ -130,7 +130,10 @@ export async function transferToken(
   amountMicro: string,
   memo?: string
 ): Promise<TransferResult> {
-  const privateKey = process.env.STACKS_PRIVATE_KEY!;
+  const privateKey = process.env.STACKS_PRIVATE_KEY;
+  if (!privateKey) {
+    throw new Error("STACKS_PRIVATE_KEY is required for escrow custodian operations (server-side only).");
+  }
   const net = await import("@stacks/network");
   // Use ready-made network instances exported by the package
   const network = process.env.NEXT_PUBLIC_FLOWVAULT_NETWORK === "mainnet"
@@ -155,13 +158,17 @@ export async function transferToken(
   };
 
   const tx = await makeContractCall(txOptions);
-  const broadcastResponse = await broadcastTransaction({ transaction: tx, network });
+  const broadcastResponse: any = await broadcastTransaction({ transaction: tx, network });
 
-  if (typeof broadcastResponse === "string") {
-    throw new Error(`Transfer broadcast failed: ${broadcastResponse}`);
+  // v7 broadcastTransaction resolves to { txid } on success, or a rejection
+  // object ({ error, reason, ... }) on failure. Never a bare string.
+  const txid = broadcastResponse?.txid || "";
+  if (!txid) {
+    const reason = broadcastResponse?.reason || broadcastResponse?.error || "unknown reason";
+    const detail = broadcastResponse?.reason_data ? ` (${JSON.stringify(broadcastResponse.reason_data)})` : "";
+    throw new Error(`Transfer to ${recipient} was rejected: ${reason}${detail}`);
   }
 
-  const txid = (broadcastResponse as any).txid || (broadcastResponse as any).result?.txid || "";
   return {
     txid,
     explorerUrl: getExplorerTxUrl(txid),

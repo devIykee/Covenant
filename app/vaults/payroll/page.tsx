@@ -18,7 +18,7 @@ export default function PayrollVault() {
       <Nav />
       <main className="max-w-2xl mx-auto px-6 py-12">
         <h1 className="font-display-lg text-2xl mb-2">Create Payroll Vault</h1>
-        <p className="text-[#424848] mb-8">Funds locked. Released in scheduled intervals. Contributor must check-in.</p>
+        <p className="text-[var(--on-surface-variant)] mb-8">Funds locked. Released in scheduled intervals. Contributor must check-in.</p>
 
         <div className="card-container p-6">
           <input placeholder="Contributor STX address" className="input-line w-full mb-4 py-2" />
