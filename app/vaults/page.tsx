@@ -18,11 +18,11 @@ export default function SecondaryVaults() {
           <div className="card-container p-6">
             <div className="flex items-center justify-between">
               <div className="font-label-caps text-xs text-[var(--on-surface-variant)]">PAYROLL VAULT</div>
-              <span className="text-[9px] font-label-caps px-1.5 py-0.5 rounded bg-[var(--brass)]/20 text-[var(--brass)]">PREVIEW</span>
+              <span className="text-[9px] font-label-caps px-1.5 py-0.5 rounded bg-[#2f7d5b]/20 text-[#2f7d5b]">LIVE</span>
             </div>
             <div className="text-xl font-semibold mt-1 mb-2">Streaming Payroll + Clawback</div>
-            <p className="text-sm text-[var(--on-surface-variant)]">Investor funds a locked vault. Releases stream at fixed intervals. Contributor must check-in each period or remaining funds clawback.</p>
-            <Link href="/vaults/payroll" className="mt-4 block btn-secondary text-xs py-2 w-full text-center">VIEW PAYROLL VAULT</Link>
+            <p className="text-sm text-[var(--on-surface-variant)]">Budget streams to a contributor. Each check-in releases a real on-chain USDCx payment; a missed check-in claws the remainder back to the payer.</p>
+            <Link href="/vaults/payroll" className="mt-4 block btn-primary text-xs py-2 w-full text-center">OPEN PAYROLL VAULT</Link>
           </div>
 
           {/* Reputation */}
