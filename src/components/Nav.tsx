@@ -111,6 +111,26 @@ export function Nav({ showMyCovenants = true }: NavProps) {
 
         <div className="hidden md:flex items-center gap-8">
           <Link
+            href="/projects"
+            className={`font-label-caps text-xs tracking-[0.08em] pb-0.5 transition-colors ${
+              isActive("/projects")
+                ? "text-[var(--ink)] border-b-2 border-[var(--ink)]"
+                : "text-[var(--on-surface-variant)] hover:text-[var(--ink)]"
+            }`}
+          >
+            BROWSE
+          </Link>
+          <Link
+            href="/dashboard"
+            className={`font-label-caps text-xs tracking-[0.08em] pb-0.5 transition-colors ${
+              isActive("/dashboard")
+                ? "text-[var(--ink)] border-b-2 border-[var(--ink)]"
+                : "text-[var(--on-surface-variant)] hover:text-[var(--ink)]"
+            }`}
+          >
+            DASHBOARD
+          </Link>
+          <Link
             href="/vaults"
             className={`font-label-caps text-xs tracking-[0.08em] pb-0.5 transition-colors ${
               isActive("/vaults")
@@ -119,16 +139,6 @@ export function Nav({ showMyCovenants = true }: NavProps) {
             }`}
           >
             VAULTS
-          </Link>
-          <Link
-            href="/projects"
-            className={`font-label-caps text-xs tracking-[0.08em] pb-0.5 transition-colors ${
-              isActive("/projects")
-                ? "text-[var(--ink)] border-b-2 border-[var(--ink)]"
-                : "text-[var(--on-surface-variant)] hover:text-[var(--ink)]"
-            }`}
-          >
-            MY COVENANTS
           </Link>
           <Link
             href="/docs"
@@ -193,11 +203,14 @@ export function Nav({ showMyCovenants = true }: NavProps) {
       {/* Mobile dropdown menu */}
       {menuOpen && (
         <div className="md:hidden border-t border-[var(--ink)]/10 bg-[var(--parchment)] px-6 py-4 flex flex-col gap-4">
+          <Link href="/projects" onClick={() => setMenuOpen(false)} className={`font-label-caps text-sm tracking-[0.08em] ${isActive("/projects") ? "text-[var(--brass)]" : "text-[var(--ink)]"}`}>
+            BROWSE
+          </Link>
+          <Link href="/dashboard" onClick={() => setMenuOpen(false)} className={`font-label-caps text-sm tracking-[0.08em] ${isActive("/dashboard") ? "text-[var(--brass)]" : "text-[var(--ink)]"}`}>
+            DASHBOARD
+          </Link>
           <Link href="/vaults" onClick={() => setMenuOpen(false)} className={`font-label-caps text-sm tracking-[0.08em] ${isActive("/vaults") ? "text-[var(--brass)]" : "text-[var(--ink)]"}`}>
             VAULTS
-          </Link>
-          <Link href="/projects" onClick={() => setMenuOpen(false)} className={`font-label-caps text-sm tracking-[0.08em] ${isActive("/projects") ? "text-[var(--brass)]" : "text-[var(--ink)]"}`}>
-            MY COVENANTS
           </Link>
           <Link href="/docs" onClick={() => setMenuOpen(false)} className={`font-label-caps text-sm tracking-[0.08em] ${isActive("/docs") ? "text-[var(--brass)]" : "text-[var(--ink)]"}`}>
             DOCS

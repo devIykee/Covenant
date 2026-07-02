@@ -18,7 +18,9 @@ model Project {
   disputeWindowBlocks Int      @default(144) // ~48h on testnet approx
   builderAddress      String
   treasuryAddress     String   // builder's receive addr, usually same or separate
-  judges              String   @default("[]") // JSON array of invited judge principals (independent verifiers)
+  judges              String   @default("[]") // JSON array of appointed judge principals (chosen by investors)
+  minFundingBps       Int      @default(10000) // minimum to proceed, basis points of goal (10000 = 100%)
+  builderAcceptedPartial Boolean @default(false) // builder chose to proceed under the minimum
   status              String   @default("CREATED") // CREATED | BACKING_OPEN | POOLED_LOCKED | DISPUTE_WINDOW | RESOLVED_SUCCESS | RESOLVED_FAILURE
   pooledTxid          String?  // tx when custodian pooled
   pooledExplorerUrl   String?
@@ -36,10 +38,13 @@ model Project {
 model BackerContribution {
   id              String   @id @default(cuid())
   projectId       String
-  principal       String   // backer STX addr
+  principal       String   // investor STX addr
   amount          String   // micro
+  status          String   @default("ACTIVE") // ACTIVE | WITHDRAWN
   depositTxid     String?  // user to custodian transfer tx (off-vault)
   depositExplorerUrl String?
+  refundTxid      String?  // custodian refund tx if withdrawn
+  refundExplorerUrl String?
   createdAt       DateTime @default(now())
 
   project         Project  @relation(fields: [projectId], references: [id])

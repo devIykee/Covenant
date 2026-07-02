@@ -100,6 +100,11 @@ const MIGRATIONS = [
   `ALTER TABLE "ReputationVault" ADD COLUMN "depositExplorerUrl" TEXT`,
   `ALTER TABLE "InsuranceContribution" ADD COLUMN "depositTxid" TEXT`,
   `ALTER TABLE "InsuranceContribution" ADD COLUMN "depositExplorerUrl" TEXT`,
+  `ALTER TABLE "Project" ADD COLUMN "minFundingBps" INTEGER NOT NULL DEFAULT 10000`,
+  `ALTER TABLE "Project" ADD COLUMN "builderAcceptedPartial" BOOLEAN NOT NULL DEFAULT false`,
+  `ALTER TABLE "BackerContribution" ADD COLUMN "status" TEXT NOT NULL DEFAULT 'ACTIVE'`,
+  `ALTER TABLE "BackerContribution" ADD COLUMN "refundTxid" TEXT`,
+  `ALTER TABLE "BackerContribution" ADD COLUMN "refundExplorerUrl" TEXT`,
 ];
 
 async function runMigrations() {

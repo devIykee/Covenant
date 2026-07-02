@@ -10,6 +10,8 @@ CREATE TABLE "Project" (
     "builderAddress" TEXT NOT NULL,
     "treasuryAddress" TEXT NOT NULL,
     "judges" TEXT NOT NULL DEFAULT '[]',
+    "minFundingBps" INTEGER NOT NULL DEFAULT 10000,
+    "builderAcceptedPartial" BOOLEAN NOT NULL DEFAULT false,
     "status" TEXT NOT NULL DEFAULT 'CREATED',
     "pooledTxid" TEXT,
     "pooledExplorerUrl" TEXT,
@@ -25,8 +27,11 @@ CREATE TABLE "BackerContribution" (
     "projectId" TEXT NOT NULL,
     "principal" TEXT NOT NULL,
     "amount" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'ACTIVE',
     "depositTxid" TEXT,
     "depositExplorerUrl" TEXT,
+    "refundTxid" TEXT,
+    "refundExplorerUrl" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "BackerContribution_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
