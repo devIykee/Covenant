@@ -17,8 +17,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const project = await db.project.findUnique({ where: { id } });
   if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
 
-  const finalTxid = depositTxid || "demo-" + Date.now().toString(16);
-  const finalExplorer = depositExplorerUrl || getExplorerTxUrl(finalTxid);
+  // Only record a real on-chain transfer id. Never fabricate one.
+  const finalTxid = typeof depositTxid === "string" && depositTxid ? depositTxid : null;
+  const finalExplorer = finalTxid ? (depositExplorerUrl || getExplorerTxUrl(finalTxid)) : null;
 
   const contribution = await db.backerContribution.create({
     data: {

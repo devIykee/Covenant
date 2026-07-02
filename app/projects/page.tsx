@@ -2,8 +2,14 @@ import { Nav } from "@/src/components/Nav";
 import Link from "next/link";
 import { db } from "@/src/lib/db";
 import { getExplorerTxUrl } from "@/src/lib/flowvault";
+import { GuidedTour, type TourStep } from "@/src/components/GuidedTour";
 
 export const dynamic = "force-dynamic";
+
+const PROJECTS_TOUR: TourStep[] = [
+  { selector: "#tour-new-covenant", title: "Create a covenant", body: "Start a new milestone-gated vault: set a funding goal, a deadline, and invite the judges who'll verify the milestone." },
+  { selector: "#tour-projects-grid", title: "Your covenants", body: "Every covenant shows its funding progress, status, and investor count. Click one to fund it, attest, or resolve it." },
+];
 
 export default async function ProjectsList() {
   const projects = await db.project.findMany({
@@ -30,9 +36,10 @@ export default async function ProjectsList() {
             <div className="font-label-caps text-xs tracking-[0.08em] text-[var(--on-surface-variant)]">COVENANT LEDGER</div>
             <h1 className="font-display-lg-mobile md:font-display-lg text-3xl md:text-[32px]">All Covenants</h1>
           </div>
-          <Link href="/projects/create" className="btn-primary text-sm py-2 px-5">+ NEW COVENANT</Link>
+          <Link id="tour-new-covenant" href="/projects/create" className="btn-primary text-sm py-2 px-5">+ NEW COVENANT</Link>
         </div>
 
+        <div id="tour-projects-grid">
         {projects.length === 0 ? (
           <div className="border border-[var(--ink)]/10 p-12 text-center">
             <p className="text-[var(--on-surface-variant)]">No covenants yet. Be the first to create one.</p>
@@ -83,11 +90,14 @@ export default async function ProjectsList() {
             })}
           </div>
         )}
+        </div>
 
         <div className="mt-12 pt-8 border-t border-[var(--ink)]/10">
           <Link href="/vaults" className="font-label-caps text-xs">EXPLORE SECONDARY VAULTS (Payroll • Reputation • Insurance) →</Link>
         </div>
       </main>
+
+      <GuidedTour steps={PROJECTS_TOUR} storageKey="covenant-projects-tour-v1" />
 
       <footer className="mt-auto border-t border-[var(--ink)]/20 py-6 text-xs text-center text-[var(--on-surface-variant)]">
         Covenant • FlowVault on Stacks testnet

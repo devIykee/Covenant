@@ -18,6 +18,7 @@ model Project {
   disputeWindowBlocks Int      @default(144) // ~48h on testnet approx
   builderAddress      String
   treasuryAddress     String   // builder's receive addr, usually same or separate
+  judges              String   @default("[]") // JSON array of invited judge principals (independent verifiers)
   status              String   @default("CREATED") // CREATED | BACKING_OPEN | POOLED_LOCKED | DISPUTE_WINDOW | RESOLVED_SUCCESS | RESOLVED_FAILURE
   pooledTxid          String?  // tx when custodian pooled
   pooledExplorerUrl   String?
@@ -97,11 +98,13 @@ model PayrollVault {
   contributorAddress String
   totalBudget       String
   intervalAmount    String
-  startBlock        Int
-  endBlock          Int
+  releasedAmount    String   @default("0") // running total streamed to the contributor
+  startBlock        Int      @default(0)
+  endBlock          Int      @default(0)
   lastReleasedBlock Int?
   status            String   @default("ACTIVE") // ACTIVE | CLAWBACK | COMPLETED
   clawbackTxid      String?
+  clawbackExplorerUrl String?
   createdAt         DateTime @default(now())
 
   checkIns          CheckIn[]
@@ -112,7 +115,9 @@ model CheckIn {
   payrollId       String
   principal       String
   intervalBlock   Int
-  txid            String?
+  amount          String?  // amount released on this check-in
+  txid            String?  // on-chain release tx
+  explorerUrl     String?
   createdAt       DateTime @default(now())
 
   payroll         PayrollVault @relation(fields: [payrollId], references: [id])

@@ -81,6 +81,31 @@ function loadSchemaStatements() {
     .map((s) => s.replace(/^CREATE INDEX /i, "CREATE INDEX IF NOT EXISTS "));
 }
 
+// Idempotent column migrations for databases created before a column existed.
+// SQLite errors with "duplicate column name" if it's already there — we ignore that.
+const MIGRATIONS = [
+  `ALTER TABLE "Project" ADD COLUMN "judges" TEXT NOT NULL DEFAULT '[]'`,
+  `ALTER TABLE "PayrollVault" ADD COLUMN "releasedAmount" TEXT NOT NULL DEFAULT '0'`,
+  `ALTER TABLE "PayrollVault" ADD COLUMN "clawbackExplorerUrl" TEXT`,
+  `ALTER TABLE "CheckIn" ADD COLUMN "amount" TEXT`,
+  `ALTER TABLE "CheckIn" ADD COLUMN "explorerUrl" TEXT`,
+];
+
+async function runMigrations() {
+  for (const sql of MIGRATIONS) {
+    try {
+      await pipeline([sql]);
+      console.log("Applied migration:", sql.slice(0, 60), "...");
+    } catch (e) {
+      if (/duplicate column/i.test(e.message)) {
+        console.log("Migration already applied (ok):", sql.slice(0, 45), "...");
+      } else {
+        throw e;
+      }
+    }
+  }
+}
+
 async function listTables() {
   const json = await pipeline([
     "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
@@ -97,6 +122,9 @@ async function listTables() {
 
   console.log("Loading schema (idempotent) ...");
   await pipeline(loadSchemaStatements());
+
+  console.log("Applying column migrations (idempotent) ...");
+  await runMigrations();
 
   const after = await listTables();
   console.log(`\n✅ Done. Tables now (${after.length}): ${after.join(", ")}`);

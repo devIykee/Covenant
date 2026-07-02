@@ -9,6 +9,7 @@ CREATE TABLE "Project" (
     "disputeWindowBlocks" INTEGER NOT NULL DEFAULT 144,
     "builderAddress" TEXT NOT NULL,
     "treasuryAddress" TEXT NOT NULL,
+    "judges" TEXT NOT NULL DEFAULT '[]',
     "status" TEXT NOT NULL DEFAULT 'CREATED',
     "pooledTxid" TEXT,
     "pooledExplorerUrl" TEXT,
@@ -81,11 +82,13 @@ CREATE TABLE "PayrollVault" (
     "contributorAddress" TEXT NOT NULL,
     "totalBudget" TEXT NOT NULL,
     "intervalAmount" TEXT NOT NULL,
-    "startBlock" INTEGER NOT NULL,
-    "endBlock" INTEGER NOT NULL,
+    "releasedAmount" TEXT NOT NULL DEFAULT '0',
+    "startBlock" INTEGER NOT NULL DEFAULT 0,
+    "endBlock" INTEGER NOT NULL DEFAULT 0,
     "lastReleasedBlock" INTEGER,
     "status" TEXT NOT NULL DEFAULT 'ACTIVE',
     "clawbackTxid" TEXT,
+    "clawbackExplorerUrl" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -95,7 +98,9 @@ CREATE TABLE "CheckIn" (
     "payrollId" TEXT NOT NULL,
     "principal" TEXT NOT NULL,
     "intervalBlock" INTEGER NOT NULL,
+    "amount" TEXT,
     "txid" TEXT,
+    "explorerUrl" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "CheckIn_payrollId_fkey" FOREIGN KEY ("payrollId") REFERENCES "PayrollVault" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );

@@ -16,11 +16,21 @@ export async function POST(req: NextRequest) {
       deadlineBlock,
       builderAddress,
       treasuryAddress,
+      judges,
     } = body;
 
     if (!title || !fundingGoal || !milestoneDescription || !deadlineBlock) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
+
+    // Invited judges: independent verifiers who attest the milestone (2-of-N).
+    const judgeList: string[] = Array.isArray(judges)
+      ? judges
+          .map((j: string) => (typeof j === "string" ? j.trim() : ""))
+          .filter((j: string) => /^S[TP][0-9A-Z]{38,40}$/.test(j))
+      : [];
+    // De-duplicate.
+    const uniqueJudges = Array.from(new Set(judgeList));
 
     const project = await db.project.create({
       data: {
@@ -32,6 +42,7 @@ export async function POST(req: NextRequest) {
         disputeWindowBlocks: 144, // ~1 day buffer on testnet
         builderAddress: builderAddress || "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM",
         treasuryAddress: treasuryAddress || builderAddress || "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM",
+        judges: JSON.stringify(uniqueJudges),
         status: "CREATED",
       },
     });

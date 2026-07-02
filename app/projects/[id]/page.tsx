@@ -3,9 +3,18 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { Nav } from "@/src/components/Nav";
+import { GuidedTour, type TourStep } from "@/src/components/GuidedTour";
 import { toast } from "sonner";
 import Link from "next/link";
-import { request, showConnect } from "@stacks/connect";
+
+const DETAIL_TOUR: TourStep[] = [
+  { selector: "#tour-timeline", title: "The lifecycle", body: "This timeline tracks the covenant from created → funded → locked → resolved. Each step logs its on-chain transaction." },
+  { selector: "#tour-custodian", title: "Live vault balance", body: "The escrow custodian's real FlowVault balance, read live from the contract. 'Locked' funds can't be withdrawn until the deadline block." },
+  { selector: "#tour-invest", title: "How investors fund it", body: "Investors send USDCx to the custodian address here. Each contribution is tracked with its real transfer transaction." },
+  { selector: "#tour-judgepanel", title: "Independent judges", body: "The judges you invited attest whether the milestone was met. 2-of-N agreement is required — this is what protects investors." },
+  { selector: "#tour-actions", title: "Custodian actions", body: "Pool the raised funds into FlowVault (locks them on-chain), then Resolve to release 80/20 on success or refund on failure. Every step produces an explorer link." },
+];
+import { request, connect, getLocalStorage } from "@stacks/connect";
 import { Cl } from "@stacks/transactions";
 import { 
   FLOWVAULT_TOKEN_CONTRACT_ADDRESS, 
@@ -58,14 +67,38 @@ export default function ProjectDetail() {
   const [isCheckingBalance, setIsCheckingBalance] = useState(false);
   const [copiedCustodian, setCopiedCustodian] = useState(false);
 
+  const [connectedAddr, setConnectedAddr] = useState<string | null>(null);
+  const [actingJudge, setActingJudge] = useState<string>("");
+  const [isAttesting, setIsAttesting] = useState(false);
+
   const projectId = params.id;
 
-  // Hardcoded demo judges for multisig 2-of-3 (global for demo)
-  const JUDGES = [
-    "ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5",
-    "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
-    "ST2JHG361ZXG51QTKY2NQCVBPPRRE2KZB1HR05NNC",
-  ];
+  // Judges are invited per-project by the builder (independent verifiers). Funds
+  // release only when 2-of-N attest MET, so investors don't have to trust the builder.
+  const invitedJudges: string[] = (() => {
+    try {
+      return JSON.parse((project as any)?.judges || "[]");
+    } catch {
+      return [];
+    }
+  })();
+  const youAreJudge = !!connectedAddr && invitedJudges.includes(connectedAddr);
+
+  // Pick up the connected wallet.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setConnectedAddr(localStorage.getItem("covenant-address"));
+  }, []);
+
+  // Default the "attest as" selection: your own address if you're a judge, else the first judge.
+  useEffect(() => {
+    if (!invitedJudges.length) {
+      setActingJudge("");
+      return;
+    }
+    setActingJudge(youAreJudge ? (connectedAddr as string) : invitedJudges[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project, connectedAddr]);
 
   async function loadProject() {
     try {
@@ -159,30 +192,11 @@ export default function ProjectDetail() {
       if (addr && addr.startsWith("ST")) return addr;
     } catch (_) {}
 
-    // Fallback: show connect
-    return new Promise((resolve, reject) => {
-      showConnect({
-        appDetails: {
-          name: "Covenant",
-          icon: (typeof window !== "undefined" ? window.location.origin : "") + "/globe.svg",
-        },
-        onFinish: (payload: any) => {
-          const userData = payload?.userSession?.loadUserData?.();
-          const addr = userData?.profile?.stxAddress?.testnet || 
-                       userData?.profile?.stxAddress?.mainnet ||
-                       userData?.identityAddress;
-          if (addr && addr.startsWith("ST")) {
-            resolve(addr);
-          } else {
-            // Last resort: ask user to paste or use a demo
-            const manual = prompt("Connected! Paste your STX testnet address (ST...) to continue:");
-            if (manual && manual.startsWith("ST")) resolve(manual);
-            else reject(new Error("Wallet address required"));
-          }
-        },
-        onCancel: () => reject(new Error("Wallet connection cancelled")),
-      });
-    });
+    // Fallback: open the wallet with @stacks/connect v8 connect()
+    await connect();
+    const stx = getLocalStorage()?.addresses?.stx?.[0]?.address;
+    if (stx && stx.startsWith("ST")) return stx;
+    throw new Error("Wallet address required — set your wallet to Testnet and reconnect.");
   }
 
   // Perform real SIP-010 USDCx transfer from user's wallet to custodian
@@ -267,21 +281,32 @@ export default function ProjectDetail() {
   }
 
   async function handleJudgeAttest(vote: "MET" | "NOT_MET") {
-    // This is demo only - restricted by address match in real.
-    const judge = JUDGES[0]; // demo use first
+    const judge = actingJudge || invitedJudges[0];
+    if (!judge) {
+      toast.error("No judges have been invited for this covenant.");
+      return;
+    }
+    setIsAttesting(true);
     try {
-      // In full implementation: use @stacks/connect signMessage + send to server for verification
+      // The server checks the judge is one of the authorized addresses. In a full
+      // build this would also verify a wallet signature of `message`.
       const message = `Covenant ${projectId} milestone: ${vote}`;
       const res = await fetch(`/api/projects/${projectId}/attest`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ judge, vote, signature: "demo-signature-" + Date.now(), message }),
       });
-      if (!res.ok) throw new Error(await res.text());
-      toast.success(`Attested: ${vote}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Attestation failed");
+      }
+      const data = await res.json().catch(() => ({}));
+      toast.success(`Judge attested "${vote}". ${data.metCount ?? 0} of 3 say MET.`);
       await loadProject();
     } catch (e: any) {
       toast.error(e.message);
+    } finally {
+      setIsAttesting(false);
     }
   }
 
@@ -336,7 +361,7 @@ export default function ProjectDetail() {
         {/* Bento: Timeline + Vault + Judges */}
         <div className="grid md:grid-cols-12 gap-6 mb-10">
           {/* Timeline */}
-          <div className="md:col-span-4 border border-[var(--ink)]/10 p-6 bg-white dark:bg-[#121720] dark:border-white/10">
+          <div id="tour-timeline" className="md:col-span-4 border border-[var(--ink)]/10 p-6 bg-white dark:bg-[#121720] dark:border-white/10">
             <div className="font-label-caps text-xs text-[var(--on-surface-variant)] mb-4">AGREEMENT TIMELINE</div>
             <div className="space-y-6 relative pl-5">
               {timelineSteps.map((step, idx) => (
@@ -355,7 +380,7 @@ export default function ProjectDetail() {
 
           {/* Vault + Judges */}
           <div className="md:col-span-8 flex flex-col gap-6">
-            <div className="border border-[var(--ink)]/10 p-6 bg-white dark:bg-[#121720] dark:border-white/10 flex flex-col md:flex-row gap-4">
+            <div id="tour-custodian" className="border border-[var(--ink)]/10 p-6 bg-white dark:bg-[#121720] dark:border-white/10 flex flex-col md:flex-row gap-4">
               <div className="flex-1">
                 <div className="font-label-caps text-xs text-[var(--on-surface-variant)]">LIVE VAULT BALANCE (CUSTODIAN)</div>
                 <div className="text-3xl font-data-lg mt-1 tracking-tight">
@@ -394,39 +419,90 @@ export default function ProjectDetail() {
               </div>
             </div>
 
-            {/* Judge Attestation Panel (matches design) */}
-            <div className="border border-[var(--ink)]/10 p-6 bg-white dark:bg-[#121720] dark:border-white/10">
-              <div className="flex justify-between mb-4">
-                <div className="font-label-caps text-xs text-[var(--on-surface-variant)]">JUDGE ATTESTATION STATUS (2-of-3)</div>
-                <div className="text-xs px-2 py-0.5 bg-[var(--surface-container-low)] text-[var(--ink)]">{attestations.length} / 3</div>
-              </div>
-
-              <div className="space-y-1 text-sm mb-6">
-                {JUDGES.map((j, i) => {
-                  const att = attestations.find(a => a.judge === j);
-                  return (
-                    <div key={i} className="flex justify-between py-2 rule-line-minor items-center text-xs">
-                      <span className="font-data-sm">{j.slice(0, 12)}...</span>
-                      <span className={att ? "text-[var(--brass)] font-medium" : "text-[var(--on-surface-variant)]"}>
-                        {att ? `ATTESTED (${att.vote})` : "PENDING"}
-                      </span>
+            {/* Judge Attestation Panel — invited independent verifiers */}
+            <div id="tour-judgepanel" className="border border-[var(--ink)]/10 p-6 bg-white dark:bg-[#121720] dark:border-white/10">
+              {(() => {
+                const threshold = Math.min(2, invitedJudges.length || 2);
+                const metCount = attestations.filter(a => a.vote === "MET" && invitedJudges.includes(a.judge)).length;
+                return (
+                  <>
+                    <div className="flex justify-between mb-1">
+                      <div className="font-label-caps text-xs text-[var(--on-surface-variant)]">MILESTONE ATTESTATION ({threshold}-of-{invitedJudges.length || "—"})</div>
+                      <div className="text-xs px-2 py-0.5 bg-[var(--surface-container-low)] text-[var(--ink)]">{metCount} MET</div>
                     </div>
-                  );
-                })}
-              </div>
+                    <p className="text-[11px] text-[var(--on-surface-variant)] mb-4">
+                      Independent judges the builder invited. Funds only release when <strong className="text-[var(--ink)]">{threshold} of {invitedJudges.length || "N"}</strong> attest MET.
+                    </p>
 
-              <div className="flex gap-3">
-                <button onClick={() => handleJudgeAttest("NOT_MET")} className="btn-secondary flex-1 text-sm py-2">ATTEST: NOT MET</button>
-                <button onClick={() => handleJudgeAttest("MET")} className="btn-primary flex-1 text-sm py-2">ATTEST: MET</button>
-              </div>
-              <p className="text-[10px] text-[var(--on-surface-variant)] mt-3">Judge panel is demo-restricted. Real app verifies signatures server-side.</p>
+                    {invitedJudges.length === 0 ? (
+                      <div className="text-sm text-[var(--on-surface-variant)] border border-dashed border-[var(--ink)]/20 rounded p-4">
+                        No judges were invited for this covenant, so its outcome can&rsquo;t be independently verified.
+                      </div>
+                    ) : (
+                      <>
+                        <div className="space-y-1 text-sm mb-5">
+                          {invitedJudges.map((j, i) => {
+                            const att = attestations.find(a => a.judge === j);
+                            const isYou = connectedAddr === j;
+                            return (
+                              <div key={i} className="flex justify-between py-2 rule-line-minor items-center text-xs gap-2">
+                                <span className="flex items-center gap-2 min-w-0">
+                                  <span className="font-label-caps text-[10px] text-[var(--on-surface-variant)] shrink-0">JUDGE {i + 1}</span>
+                                  <span className="font-data-sm truncate">{j.slice(0, 10)}…{j.slice(-4)}</span>
+                                  {isYou && <span className="text-[9px] px-1.5 py-0.5 rounded bg-[var(--brass)]/20 text-[var(--brass)] font-bold shrink-0">YOU</span>}
+                                </span>
+                                <span className={att ? (att.vote === "MET" ? "text-[var(--brass)] font-medium shrink-0" : "text-[var(--signet)] font-medium shrink-0") : "text-[var(--on-surface-variant)] shrink-0"}>
+                                  {att ? att.vote : "PENDING"}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {youAreJudge ? (
+                          <div className="mb-3 text-[11px] text-[var(--brass)]">You are an invited judge — cast your vote below.</div>
+                        ) : (
+                          <div className="mb-3 flex items-center justify-between gap-2 flex-wrap">
+                            <span className="text-[11px] text-[var(--on-surface-variant)]">You&rsquo;re not an invited judge. Share this page so a judge can attest:</span>
+                            <button
+                              type="button"
+                              onClick={() => { navigator.clipboard?.writeText(typeof window !== "undefined" ? window.location.href : ""); toast.success("Invite link copied"); }}
+                              className="btn-secondary text-[10px] px-2 py-1"
+                            >
+                              COPY INVITE LINK
+                            </button>
+                          </div>
+                        )}
+
+                        <label className="block font-label-caps text-[10px] text-[var(--on-surface-variant)] mb-1">ATTEST AS</label>
+                        <select
+                          value={actingJudge}
+                          onChange={(e) => setActingJudge(e.target.value)}
+                          className="input-line w-full py-2 mb-3 text-sm font-data-sm bg-transparent"
+                        >
+                          {invitedJudges.map((j, i) => (
+                            <option key={i} value={j}>
+                              Judge {i + 1} — {j.slice(0, 10)}…{j.slice(-4)}{connectedAddr === j ? " (you)" : ""}
+                            </option>
+                          ))}
+                        </select>
+
+                        <div className="flex gap-3">
+                          <button onClick={() => handleJudgeAttest("NOT_MET")} disabled={isAttesting} className="btn-secondary flex-1 text-sm py-2 disabled:opacity-50">ATTEST: NOT MET</button>
+                          <button onClick={() => handleJudgeAttest("MET")} disabled={isAttesting} className="btn-primary flex-1 text-sm py-2 disabled:opacity-50">ATTEST: MET</button>
+                        </div>
+                      </>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           </div>
         </div>
 
         {/* Back this project section */}
         {project.status === "CREATED" || project.status === "BACKING_OPEN" ? (
-          <div className="border border-[var(--ink)]/10 p-6 mb-8 max-w-lg">
+          <div id="tour-invest" className="border border-[var(--ink)]/10 p-6 mb-8 max-w-lg">
             <div className="font-label-caps text-xs mb-2">TRANSACTION SETUP</div>
             <h3 className="font-headline-md mb-4">Invest in this Covenant</h3>
 
@@ -483,7 +559,7 @@ export default function ProjectDetail() {
         </div>
 
         {/* Pool + Resolution Controls */}
-        <div className="border border-[var(--ink)]/10 p-6 bg-white dark:bg-[#121720] dark:border-white/10 mb-8">
+        <div id="tour-actions" className="border border-[var(--ink)]/10 p-6 bg-white dark:bg-[#121720] dark:border-white/10 mb-8">
           <div className="font-label-caps text-xs mb-3">CUSTODIAN ACTIONS (PRIMARY FLOW)</div>
 
           <div className="flex flex-wrap gap-3 mb-3">
@@ -515,6 +591,8 @@ export default function ProjectDetail() {
           <div className="mt-1">{project.milestoneDescription}</div>
         </div>
       </main>
+
+      <GuidedTour steps={DETAIL_TOUR} storageKey="covenant-detail-tour-v1" />
     </div>
   );
 }

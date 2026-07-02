@@ -1,7 +1,30 @@
 import { Nav } from "@/src/components/Nav";
 import Link from "next/link";
+import { db } from "@/src/lib/db";
+import { GuidedTour, type TourStep } from "@/src/components/GuidedTour";
 
-export default function CovenantHome() {
+export const dynamic = "force-dynamic";
+
+const HOME_TOUR: TourStep[] = [
+  { selector: "#tour-home-cta", title: "Start here", body: "Browse existing covenants, or create your own — a milestone-gated vault where funds release only when invited judges verify the milestone." },
+  { selector: "#tour-home-active", title: "Live covenants", body: "These are real covenants from the database — click any card to see its timeline, judges, and on-chain vault balance." },
+  { selector: "#docs", title: "New to all this?", body: "The Docs page walks a total beginner from a blank machine to a real testnet transaction. Every click explained." },
+];
+
+function statusBadge(status: string) {
+  if (status === "RESOLVED_SUCCESS") return <span className="stamp-resolved font-label-caps text-[11px] px-3 py-1 font-bold rounded-sm border-2">RESOLVED</span>;
+  if (status === "RESOLVED_FAILURE") return <span className="stamp-refunded font-label-caps text-[11px] px-3 py-1 font-bold rounded-sm border-2">REFUNDED</span>;
+  if (status === "POOLED_LOCKED" || status === "DISPUTE_WINDOW") return <span className="stamp-locked font-label-caps text-[11px] px-3 py-1 font-bold rounded-sm">LOCKED</span>;
+  return <span className="stamp-open font-label-caps text-[11px] px-3 py-1 font-bold rounded-sm border-2">OPEN</span>;
+}
+
+export default async function CovenantHome() {
+  const projects = await db.project.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 3,
+    include: { contributions: true },
+  }).catch(() => []);
+
   return (
     <div className="min-h-screen flex flex-col">
       <Nav />
@@ -15,7 +38,7 @@ export default function CovenantHome() {
           <p className="font-body-lg text-lg md:text-[18px] leading-[28px] text-[var(--on-surface-variant)]">
             Immutable ledgers and mathematically verified agreements. Secure your assets with institutional-grade smart contracts, formalized on-chain.
           </p>
-          <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
+          <div id="tour-home-cta" className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/projects" className="btn-primary">
               BROWSE COVENANTS
             </Link>
@@ -27,8 +50,8 @@ export default function CovenantHome() {
 
         <div className="w-full h-px border-t border-[var(--ink)]/20 mb-16" />
 
-        {/* Project Grid - static demo cards matching design + link to live */}
-        <div className="mb-8 flex items-end justify-between">
+        {/* Project Grid - real covenants from the DB */}
+        <div id="tour-home-active" className="mb-8 flex items-end justify-between">
           <div>
             <div className="font-label-caps text-xs tracking-[0.08em] text-[var(--on-surface-variant)]">ACTIVE COVENANTS</div>
             <div className="font-headline-md text-[24px]">Milestone-Gated Vaults</div>
@@ -36,115 +59,55 @@ export default function CovenantHome() {
           <Link href="/projects" className="text-xs font-label-caps tracking-widest text-[var(--ink)] hover:underline">VIEW ALL →</Link>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {/* Demo Card 1 - OPEN */}
-          <article className="relative bg-[var(--parchment)] border border-[var(--ink)]/10 p-6 rounded-sm shadow-[2px_2px_0px_rgba(11,29,29,0.05)] hover:bg-[var(--parchment)]/70 transition-colors flex flex-col h-full">
-            <div className="absolute top-4 right-4 stamp-open font-label-caps text-[11px] px-3 py-1 font-bold rounded-sm border-2">
-              OPEN
-            </div>
-            <div className="mb-6">
-              <span className="font-data-sm text-[13px] text-[var(--on-surface-variant)] block mb-2">REF: COV-2024-A1</span>
-              <h2 className="font-headline-md text-[24px] text-[var(--ink)] mb-2">Artemis Liquidity Pool</h2>
-              <p className="font-body-md text-sm text-[var(--on-surface-variant)] line-clamp-3">
-                Establishing a decentralized treasury reserve for the Artemis protocol, utilizing multi-signature consensus for tranche releases.
-              </p>
-            </div>
-            <div className="mt-auto space-y-6">
-              <div>
-                <div className="flex justify-between items-end mb-2">
-                  <span className="font-label-caps text-xs text-[var(--on-surface-variant)]">FUNDING PROGRESS</span>
-                  <span className="font-data-lg text-[16px] text-[var(--ink)]">450,000 / 1,000,000 USDCx</span>
-                </div>
-                <div className="progress-bar w-full"><div className="progress-fill w-[45%]" /></div>
-              </div>
-              <div className="border-t border-[var(--ink)]/10 pt-4 space-y-1">
-                <div className="flex justify-between py-1 border-b border-[var(--ink)]/10 text-sm">
-                  <span className="font-label-caps text-xs text-[var(--on-surface-variant)]">DEADLINE</span>
-                  <span className="font-data-sm text-[var(--ink)]">14D 08H 22M</span>
-                </div>
-                <div className="flex justify-between py-1 text-sm">
-                  <span className="font-label-caps text-xs text-[var(--on-surface-variant)]">PARTICIPANTS</span>
-                  <span className="font-data-sm text-[var(--ink)]">128 Signatories</span>
-                </div>
-              </div>
-              <Link href="/projects" className="block w-full text-center border border-[var(--ink)] py-3 font-label-caps text-xs hover:bg-[var(--ink)] hover:text-[var(--parchment)] transition-colors">
-                REVIEW TERMS
-              </Link>
-            </div>
-          </article>
-
-          {/* Card 2 - LOCKED */}
-          <article className="relative bg-[var(--parchment)] border border-[var(--ink)]/10 p-6 rounded-sm flex flex-col h-full opacity-80">
-            <div className="absolute top-4 right-4 stamp-locked font-label-caps text-[11px] px-3 py-1 font-bold rounded-sm">
-              LOCKED
-            </div>
-            <div className="mb-6">
-              <span className="font-data-sm text-xs text-[var(--on-surface-variant)] block mb-2">REF: COV-2023-X9</span>
-              <h2 className="font-headline-md text-[24px] text-[var(--ink)] mb-2">Zenith Staking Escrow</h2>
-              <p className="font-body-md text-sm text-[var(--on-surface-variant)] line-clamp-3">
-                Locked liquidity for Zenith validators. Funds are currently in staking period with time-locked withdrawal conditions met.
-              </p>
-            </div>
-            <div className="mt-auto space-y-6">
-              <div>
-                <div className="flex justify-between items-end mb-2">
-                  <span className="font-label-caps text-xs text-[var(--on-surface-variant)]">FUNDING PROGRESS</span>
-                  <span className="font-data-lg text-[16px]">2,500,000 / 2,500,000 USDCx</span>
-                </div>
-                <div className="progress-bar w-full"><div className="progress-fill w-full" /></div>
-              </div>
-              <div className="border-t border-[var(--ink)]/10 pt-4">
-                <div className="flex justify-between py-1 border-b border-[var(--ink)]/10 text-sm bg-[var(--parchment)]/50">
-                  <span className="font-label-caps text-xs text-[var(--on-surface-variant)]">UNLOCK DATE</span>
-                  <span className="font-data-sm text-[var(--ink)]">2025.10.15</span>
-                </div>
-                <div className="flex justify-between py-1 text-sm">
-                  <span className="font-label-caps text-xs text-[var(--on-surface-variant)]">PARTICIPANTS</span>
-                  <span className="font-data-sm text-[var(--ink)]">42 Signatories</span>
-                </div>
-              </div>
-              <div className="w-full border border-[var(--ink)]/20 bg-[var(--ink)]/5 text-[var(--on-surface-variant)] font-label-caps text-xs py-3 text-center cursor-not-allowed">
-                VIEW LEDGER
-              </div>
-            </div>
-          </article>
-
-          {/* Card 3 - RESOLVED */}
-          <article className="relative bg-[var(--parchment)] border border-[var(--ink)]/10 p-6 rounded-sm flex flex-col h-full">
-            <div className="absolute top-4 right-4 stamp-resolved font-label-caps text-[11px] px-3 py-1 font-bold rounded-sm border-2">
-              RESOLVED
-            </div>
-            <div className="mb-6">
-              <span className="font-data-sm text-xs text-[var(--on-surface-variant)] block mb-2">REF: COV-2023-B2</span>
-              <h2 className="font-headline-md text-[24px] text-[var(--ink)] mb-2">Vanguard Treasury</h2>
-              <p className="font-body-md text-sm text-[var(--on-surface-variant)] line-clamp-3">
-                Initial treasury bootstrap for Vanguard DAO. All milestones achieved and funds fully disbursed according to contract terms.
-              </p>
-            </div>
-            <div className="mt-auto space-y-6">
-              <div>
-                <div className="flex justify-between items-end mb-2">
-                  <span className="font-label-caps text-xs text-[var(--on-surface-variant)]">FINAL DISBURSEMENT</span>
-                  <span className="font-data-lg text-[16px]">800,000 USDCx</span>
-                </div>
-                <div className="progress-bar w-full"><div className="progress-brass w-full" /></div>
-              </div>
-              <div className="border-t border-[var(--ink)]/10 pt-4">
-                <div className="flex justify-between py-1 border-b border-[var(--ink)]/10 text-sm">
-                  <span className="font-label-caps text-xs text-[var(--on-surface-variant)]">RESOLUTION DATE</span>
-                  <span className="font-data-sm text-[var(--ink)]">2024.01.12</span>
-                </div>
-                <div className="flex justify-between py-1 text-sm">
-                  <span className="font-label-caps text-xs text-[var(--on-surface-variant)]">STATUS</span>
-                  <span className="font-data-sm text-[var(--ink)]">Executed</span>
-                </div>
-              </div>
-              <Link href="/projects" className="block w-full border border-[var(--ink)] text-center py-3 font-label-caps text-xs hover:bg-[var(--ink)] hover:text-[var(--parchment)] transition-colors">
-                VERIFY ON-CHAIN
-              </Link>
-            </div>
-          </article>
-        </div>
+        {projects.length === 0 ? (
+          <div className="border border-dashed border-[var(--ink)]/20 rounded-sm p-12 text-center">
+            <p className="text-[var(--on-surface-variant)] mb-4">No covenants have been created yet.</p>
+            <Link href="/projects/create" className="btn-primary inline-block">CREATE THE FIRST COVENANT</Link>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {projects.map((p) => {
+              const raised = p.contributions.reduce((s, c) => s + BigInt(c.amount), BigInt(0));
+              const goal = BigInt(p.fundingGoal);
+              const pct = goal > BigInt(0) ? Math.min(100, Number((raised * BigInt(100)) / goal)) : 0;
+              const resolved = p.status === "RESOLVED_SUCCESS";
+              return (
+                <Link key={p.id} href={`/projects/${p.id}`} className="group">
+                  <article className="relative bg-[var(--parchment)] border border-[var(--ink)]/10 p-6 rounded-sm shadow-[2px_2px_0px_rgba(11,29,29,0.05)] hover:bg-[var(--parchment)]/70 transition-colors flex flex-col h-full">
+                    <div className="absolute top-4 right-4">{statusBadge(p.status)}</div>
+                    <div className="mb-6">
+                      <span className="font-data-sm text-[13px] text-[var(--on-surface-variant)] block mb-2">REF: {p.id.slice(0, 8).toUpperCase()}</span>
+                      <h2 className="font-headline-md text-[24px] text-[var(--ink)] mb-2 pr-20 group-hover:underline">{p.title}</h2>
+                      <p className="font-body-md text-sm text-[var(--on-surface-variant)] line-clamp-3">{p.description}</p>
+                    </div>
+                    <div className="mt-auto space-y-6">
+                      <div>
+                        <div className="flex justify-between items-end mb-2">
+                          <span className="font-label-caps text-xs text-[var(--on-surface-variant)]">FUNDING PROGRESS</span>
+                          <span className="font-data-lg text-[15px] text-[var(--ink)]">{(Number(raised) / 1e6).toFixed(0)} / {(Number(goal) / 1e6).toFixed(0)} USDCx</span>
+                        </div>
+                        <div className="progress-bar w-full"><div className={resolved ? "progress-brass" : "progress-fill"} style={{ width: `${resolved ? 100 : pct}%` }} /></div>
+                      </div>
+                      <div className="border-t border-[var(--ink)]/10 pt-4 space-y-1">
+                        <div className="flex justify-between py-1 border-b border-[var(--ink)]/10 text-sm">
+                          <span className="font-label-caps text-xs text-[var(--on-surface-variant)]">DEADLINE</span>
+                          <span className="font-data-sm text-[var(--ink)]">Block {p.deadlineBlock}</span>
+                        </div>
+                        <div className="flex justify-between py-1 text-sm">
+                          <span className="font-label-caps text-xs text-[var(--on-surface-variant)]">INVESTORS</span>
+                          <span className="font-data-sm text-[var(--ink)]">{p.contributions.length}</span>
+                        </div>
+                      </div>
+                      <div className="block w-full text-center border border-[var(--ink)] py-3 font-label-caps text-xs group-hover:bg-[var(--ink)] group-hover:text-[var(--parchment)] transition-colors">
+                        REVIEW TERMS
+                      </div>
+                    </div>
+                  </article>
+                </Link>
+              );
+            })}
+          </div>
+        )}
 
         {/* Secondary Vaults teaser */}
         <div id="docs" className="mt-20 pt-12 border-t border-[var(--ink)]/20">
@@ -193,6 +156,8 @@ export default function CovenantHome() {
           </div>
         </div>
       </footer>
+
+      <GuidedTour steps={HOME_TOUR} storageKey="covenant-home-tour-v1" />
     </div>
   );
 }
