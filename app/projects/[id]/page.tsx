@@ -12,7 +12,9 @@ const DETAIL_TOUR: TourStep[] = [
   { selector: "#tour-custodian", title: "Live vault balance", body: "The escrow custodian's real FlowVault balance, read live from the contract. 'Locked' funds can't be withdrawn until the deadline block." },
   { selector: "#tour-invest", title: "How investors fund it", body: "Investors send USDCx to the custodian address here. Each contribution is tracked with its real transfer transaction." },
   { selector: "#tour-judgepanel", title: "Independent judges", body: "The judges you invited attest whether the milestone was met. 2-of-N agreement is required — this is what protects investors." },
-  { selector: "#tour-actions", title: "Custodian actions", body: "Pool the raised funds into FlowVault (locks them on-chain), then Resolve to release 80/20 on success or refund on failure. Every step produces an explorer link." },
+  { selector: "#tour-lock", title: "① Lock funds in escrow", body: "Once funding hits the minimum and judges are appointed, this locks the raised USDCx in FlowVault until the deadline. Nobody can pull it out early." },
+  { selector: "#tour-release", title: "② Release to builder", body: "Only clickable after 2-of-N judges sign that the milestone was met. Pays 80% to the builder and 20% back to investors — all on-chain." },
+  { selector: "#tour-refund", title: "② Refund investors", body: "The safety path: if the milestone isn't met, this refunds 100% of the pool pro-rata back to investors." },
 ];
 import { request, connect, getLocalStorage } from "@stacks/connect";
 import { Cl } from "@stacks/transactions";
@@ -33,6 +35,8 @@ interface Project {
   status: string;
   builderAddress: string;
   treasuryAddress: string;
+  minFundingBps?: number;
+  builderAcceptedPartial?: boolean;
   pooledTxid?: string;
   pooledExplorerUrl?: string;
   withdrawTxid?: string;
@@ -43,6 +47,7 @@ interface Contribution {
   id: string;
   principal: string;
   amount: string;
+  status?: string;
   depositTxid?: string;
   depositExplorerUrl?: string;
 }
@@ -85,8 +90,19 @@ export default function ProjectDetail() {
       return [];
     }
   })();
+  // Funding math — only ACTIVE (non-withdrawn) deposits count.
+  const activeContribs = contributions.filter((c) => c.status !== "WITHDRAWN");
+  const totalRaised = activeContribs.reduce((s, c) => s + BigInt(c.amount), BigInt(0));
+  const goal = project ? BigInt(project.fundingGoal) : BigInt(0);
+  const progress = goal > BigInt(0) ? Math.min(Number((totalRaised * BigInt(100)) / goal), 100) : 0;
+  const minBps = project?.minFundingBps ?? 10000;
+  const minRequired = goal > BigInt(0) ? (goal * BigInt(minBps)) / BigInt(10000) : BigInt(0);
+  const metMin = totalRaised >= minRequired || !!project?.builderAcceptedPartial;
+
   const youAreJudge = !!connectedAddr && invitedJudges.includes(connectedAddr);
-  const youAreInvestor = !!connectedAddr && contributions.some((c) => c.principal === connectedAddr);
+  const youAreInvestor = !!connectedAddr && activeContribs.some((c) => c.principal === connectedAddr);
+  const youAreBuilder = !!connectedAddr && connectedAddr === project?.builderAddress;
+  const preLock = ["CREATED", "BACKING_OPEN"].includes(project?.status || "");
   const canAppointJudges = youAreInvestor && ["CREATED", "BACKING_OPEN"].includes(project?.status || "");
 
   async function handleAppointJudges(addresses: string[]) {
@@ -110,6 +126,35 @@ export default function ProjectDetail() {
     } finally {
       setIsAppointing(false);
     }
+  }
+
+  async function handleWithdraw() {
+    if (!connectedAddr) { toast.error("Connect your wallet."); return; }
+    setIsAppointing(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/withdraw-contribution`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ investor: connectedAddr }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "Withdrawal failed");
+      toast.success("Deposit refunded to your wallet.");
+      if (d.explorerUrl) window.open(d.explorerUrl, "_blank");
+      await loadProject();
+    } catch (e: any) { toast.error(e.message); } finally { setIsAppointing(false); }
+  }
+
+  async function handleAcceptPartial() {
+    if (!connectedAddr) { toast.error("Connect your wallet."); return; }
+    setIsAppointing(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/accept-partial`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ builder: connectedAddr }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "Failed");
+      toast.success("Accepted the partial raise — you can now lock funds.");
+      await loadProject();
+    } catch (e: any) { toast.error(e.message); } finally { setIsAppointing(false); }
   }
 
   // Pick up the connected wallet + this page's shareable URL (the judge invite link).
@@ -194,10 +239,6 @@ export default function ProjectDetail() {
     const interval = setInterval(pollVaultState, 8000);
     return () => clearInterval(interval);
   }, [projectId]);
-
-  const totalRaised = contributions.reduce((s, c) => s + BigInt(c.amount), BigInt(0));
-  const goal = project ? BigInt(project.fundingGoal) : BigInt(0);
-  const progress = goal > BigInt(0) ? Math.min(Number((totalRaised * BigInt(100)) / goal), 100) : 0;
 
   // Simple status timeline
   const timelineSteps = [
@@ -621,43 +662,89 @@ export default function ProjectDetail() {
           </div>
         </div>
 
-        {/* Pool + Resolution Controls */}
+        {/* Funding status + pre-lock actions (investor withdraw / builder accept-partial) */}
+        {preLock && (
+          <div className="border border-[var(--ink)]/10 p-6 mb-8 rounded-sm">
+            <div className="flex justify-between text-xs font-label-caps text-[var(--on-surface-variant)] mb-1.5">
+              <span>FUNDING</span>
+              <span>{(Number(totalRaised) / 1e6).toFixed(0)} / {(Number(goal) / 1e6).toFixed(0)} USDCx · min {(minBps / 100).toFixed(0)}%</span>
+            </div>
+            <div className="relative progress-bar w-full">
+              <div className="progress-fill" style={{ width: `${progress}%` }} />
+              <div className="absolute top-[-2px] bottom-[-2px] w-[2px] bg-[var(--signet)]" style={{ left: `${Math.min(100, minBps / 100)}%` }} title="Minimum to proceed" />
+            </div>
+            <p className="text-xs mt-2 text-[var(--on-surface-variant)]">
+              {metMin ? "Minimum reached — ready to lock once judges are appointed." : "Below the builder's minimum. Investors may withdraw, or the builder can accept the partial raise."}
+            </p>
+
+            <div className="flex flex-wrap gap-3 mt-3">
+              {youAreInvestor && (
+                <button onClick={handleWithdraw} disabled={isAppointing} className="btn-secondary text-xs py-2 px-4 disabled:opacity-50">WITHDRAW MY DEPOSIT</button>
+              )}
+              {youAreBuilder && !metMin && activeContribs.length > 0 && (
+                <button onClick={handleAcceptPartial} disabled={isAppointing} className="btn-primary text-xs py-2 px-4 disabled:opacity-50">ACCEPT PARTIAL &amp; PROCEED</button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Settlement controls */}
         <div id="tour-actions" className="border border-[var(--ink)]/10 p-6 bg-white dark:bg-[#121720] dark:border-white/10 mb-8">
-          <div className="font-label-caps text-xs mb-3">CUSTODIAN ACTIONS (PRIMARY FLOW)</div>
+          <div className="font-label-caps text-xs mb-1">SETTLEMENT — after funding &amp; judging</div>
+          <p className="text-xs text-[var(--on-surface-variant)] mb-4">These lock and release the escrowed funds. Each produces a real on-chain transaction.</p>
 
           {(() => {
+            const threshold = Math.min(2, invitedJudges.length || 2);
+            const metCount = attestations.filter(a => a.vote === "MET" && invitedJudges.includes(a.judge)).length;
             const poolBlockReason =
-              contributions.length === 0
+              activeContribs.length === 0
                 ? "No investors have deposited yet."
                 : invitedJudges.length === 0
-                ? "Investors must appoint at least one judge before pooling."
+                ? "Investors must appoint at least one judge first."
+                : !metMin
+                ? "Funding is below the minimum (builder can accept the partial raise above)."
                 : "";
+            const canRelease = metCount >= threshold;
             return (
-              <>
-                <div className="flex flex-wrap gap-3 mb-3">
+              <div className="space-y-3">
+                <div>
                   <button
+                    id="tour-lock"
                     disabled={!!poolBlockReason}
                     title={poolBlockReason}
                     onClick={async () => {
                       const r = await fetch(`/api/projects/${projectId}/pool`, { method: "POST" });
                       const d = await r.json();
-                      if (r.ok) { toast.success("Pooled to FlowVault"); window.open(d.explorerUrl, "_blank"); }
+                      if (r.ok) { toast.success("Funds locked in escrow"); window.open(d.explorerUrl, "_blank"); }
                       else toast.error(d.error);
                       await loadProject();
                     }}
-                    className="btn-secondary text-sm py-2 disabled:opacity-40">POOL INTO FLOWVAULT (LOCK 100%)</button>
-
-                  <button onClick={() => handleResolve(true)} className="btn-primary text-sm py-2">RESOLVE SUCCESS — 80% BUILDER / 20% PRO-RATA</button>
-                  <button onClick={() => handleResolve(false)} className="btn-secondary text-sm py-2">RESOLVE FAILURE — 100% REFUND</button>
+                    className="btn-secondary text-sm py-2 w-full sm:w-auto disabled:opacity-40">① LOCK FUNDS IN ESCROW</button>
+                  <p className="text-[11px] text-[var(--on-surface-variant)] mt-1">{poolBlockReason || "Locks the raised USDCx in FlowVault until the deadline (set-routing-rules + deposit)."}</p>
                 </div>
-                {poolBlockReason && <p className="text-xs mb-1 text-[var(--signet)]">{poolBlockReason}</p>}
-              </>
+
+                <div>
+                  <button
+                    id="tour-release"
+                    disabled={!canRelease}
+                    title={canRelease ? "" : "Requires 2-of-N judges to sign MET first."}
+                    onClick={() => handleResolve(true)}
+                    className="btn-primary text-sm py-2 w-full sm:w-auto disabled:opacity-40">② RELEASE TO BUILDER — milestone met</button>
+                  <p className="text-[11px] text-[var(--on-surface-variant)] mt-1">{canRelease ? "Withdraws from FlowVault and pays 80% builder / 20% investors." : `Enabled once ${threshold}-of-${invitedJudges.length || "N"} judges sign MET (currently ${metCount}).`}</p>
+                </div>
+
+                <div>
+                  <button
+                    id="tour-refund"
+                    onClick={() => handleResolve(false)}
+                    className="btn-secondary text-sm py-2 w-full sm:w-auto">② REFUND INVESTORS — milestone not met</button>
+                  <p className="text-[11px] text-[var(--on-surface-variant)] mt-1">Withdraws from FlowVault and refunds 100% pro-rata to investors.</p>
+                </div>
+              </div>
             );
           })()}
 
-          <p className="text-xs mt-1 text-[var(--on-surface-variant)]">Pool executes set-routing-rules + deposit on custodian vault. Resolution calls withdraw then distributes. All txs logged.</p>
-
-          {project.pooledExplorerUrl && <a href={project.pooledExplorerUrl} target="_blank" className="text-xs underline block mt-1">Pooled tx: {project.pooledTxid?.slice(0,10)} ↗</a>}
+          {project.pooledExplorerUrl && <a href={project.pooledExplorerUrl} target="_blank" className="text-xs underline block mt-3">Locked tx: {project.pooledTxid?.slice(0,10)} ↗</a>}
           {project.withdrawExplorerUrl && (
             <a href={project.withdrawExplorerUrl} target="_blank" className="block mt-1 text-xs underline">Withdraw tx ↗</a>
           )}

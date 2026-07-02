@@ -15,7 +15,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   });
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const totalPooled = project.contributions.reduce((s, c) => s + BigInt(c.amount), BigInt(0));
+  // Only ACTIVE (non-withdrawn) deposits are part of the pool.
+  const activeContribs = project.contributions.filter((c) => c.status !== "WITHDRAWN");
+  const totalPooled = activeContribs.reduce((s, c) => s + BigInt(c.amount), BigInt(0));
   if (totalPooled === BigInt(0)) return NextResponse.json({ error: "No funds to resolve" }, { status: 400 });
 
   try {
@@ -50,8 +52,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         data: { projectId: id, recipient: project.treasuryAddress, amount: builderShare.toString(), txid: bTx.txid, explorerUrl: bTx.explorerUrl, kind: "BUILDER_PAYOUT" },
       });
 
-      // Pro-rata to backers
-      const shares = computeProRataShares(project.contributions, backerShare.toString());
+      // Pro-rata to investors
+      const shares = computeProRataShares(activeContribs, backerShare.toString());
       for (const s of shares) {
         if (BigInt(s.share) > BigInt(0)) {
           const t = await transferToken(s.principal, s.share, `Covenant ${id} reward`);
@@ -63,7 +65,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       }
     } else {
       // Full refund pro-rata
-      for (const c of project.contributions) {
+      for (const c of activeContribs) {
         const t = await transferToken(c.principal, c.amount, `Covenant ${id} refund`);
         txids.push(t.txid);
         await db.distribution.create({
@@ -73,7 +75,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     // Bump reputation for all participants
-    const allPrincipals = new Set<string>([project.builderAddress, ...project.contributions.map(c => c.principal)]);
+    const allPrincipals = new Set<string>([project.builderAddress, ...activeContribs.map(c => c.principal)]);
     for (const p of allPrincipals) {
       await db.reputation.upsert({
         where: { principal: p },

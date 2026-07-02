@@ -16,21 +16,16 @@ export async function POST(req: NextRequest) {
       deadlineBlock,
       builderAddress,
       treasuryAddress,
-      judges,
+      minFundingBps,
     } = body;
 
     if (!title || !fundingGoal || !milestoneDescription || !deadlineBlock) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    // Invited judges: independent verifiers who attest the milestone (2-of-N).
-    const judgeList: string[] = Array.isArray(judges)
-      ? judges
-          .map((j: string) => (typeof j === "string" ? j.trim() : ""))
-          .filter((j: string) => /^S[TP][0-9A-Z]{38,40}$/.test(j))
-      : [];
-    // De-duplicate.
-    const uniqueJudges = Array.from(new Set(judgeList));
+    // Minimum to proceed, in basis points of the goal (clamp 1%..100%). Judges are
+    // NOT set here — investors appoint them after depositing.
+    const minBps = Math.min(10000, Math.max(100, Number(minFundingBps) || 10000));
 
     const project = await db.project.create({
       data: {
@@ -42,7 +37,8 @@ export async function POST(req: NextRequest) {
         disputeWindowBlocks: 144, // ~1 day buffer on testnet
         builderAddress: builderAddress || "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM",
         treasuryAddress: treasuryAddress || builderAddress || "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM",
-        judges: JSON.stringify(uniqueJudges),
+        judges: "[]",
+        minFundingBps: minBps,
         status: "CREATED",
       },
     });

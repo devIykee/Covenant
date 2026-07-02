@@ -13,6 +13,7 @@ const CREATE_TOUR: TourStep[] = [
   { selector: "#tour-details", title: "Acceptance criteria", body: "Spell out exactly what the judges will check before releasing funds." },
   { selector: "#tour-goal", title: "Funding goal", body: "How much USDCx you aim to raise. Investors send this token to the escrow custodian." },
   { selector: "#tour-deadline", title: "Deadline", body: "Pick a calendar date. We convert it to a Stacks block height for the on-chain time-lock." },
+  { selector: "#tour-min", title: "Minimum to proceed", body: "The least you'll accept. Raise below it and investors can withdraw — or you can accept the partial amount. 100% = all-or-nothing." },
   { selector: "#tour-builder", title: "Builder address (optional)", body: "The builder's Stacks address. Leave blank to use your connected wallet." },
   { selector: "#tour-treasury", title: "Treasury address", body: "Where the 80% builder payout is sent if the milestone succeeds." },
   { selector: "#tour-submit", title: "Publish the campaign", body: "Creates the campaign and lists it on the site. Investors deposit into escrow and then appoint the judges — you don't pick your own referees." },
@@ -31,6 +32,7 @@ export default function CreateProject() {
     deadlineDate: "",
     builderAddress: "",
     treasuryAddress: "",
+    minPct: "100",
   });
 
   // Estimate block height from date (testnet ~ 144 blocks/hour ~ 3456/day)
@@ -78,6 +80,7 @@ export default function CreateProject() {
           deadlineBlock: targetBlock,
           builderAddress: form.builderAddress || "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM", // fallback demo
           treasuryAddress: form.treasuryAddress || form.builderAddress || "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM",
+          minFundingBps: Math.round(Math.min(100, Math.max(1, Number(form.minPct) || 100)) * 100),
         }),
       });
 
@@ -198,6 +201,24 @@ export default function CreateProject() {
                   Estimated Block Height: <span className="font-bold text-[var(--ink)]">{estimatedBlock ?? "—"}</span>
                 </p>
               </div>
+            </div>
+
+            <div className="mt-6" id="tour-min">
+              <label className="block font-label-caps text-xs text-[var(--on-surface-variant)] mb-2">MINIMUM TO PROCEED (% OF GOAL)</label>
+              <div className="relative max-w-[200px]">
+                <input
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={form.minPct}
+                  onChange={(e) => setForm({ ...form, minPct: e.target.value })}
+                  className="input-line w-full pl-4 pr-10 py-3 font-data-lg text-lg"
+                />
+                <div className="absolute right-4 top-3 text-sm text-[var(--on-surface-variant)]">%</div>
+              </div>
+              <p className="mt-1.5 text-xs text-[var(--on-surface-variant)] max-w-lg">
+                If less than this is raised, investors can withdraw their deposits — or you can accept the partial amount and proceed. 100% means all-or-nothing.
+              </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-6">

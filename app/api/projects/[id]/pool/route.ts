@@ -11,9 +11,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const project = await db.project.findUnique({ where: { id }, include: { contributions: true } });
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const total = project.contributions.reduce((s, c) => s + BigInt(c.amount), BigInt(0)).toString();
+  // Only ACTIVE (non-withdrawn) contributions count toward the pooled amount.
+  const activeContribs = project.contributions.filter((c) => c.status !== "WITHDRAWN");
+  const totalBig = activeContribs.reduce((s, c) => s + BigInt(c.amount), BigInt(0));
+  const total = totalBig.toString();
 
-  if (BigInt(total) === BigInt(0)) return NextResponse.json({ error: "No contributions" }, { status: 400 });
+  if (totalBig === BigInt(0)) return NextResponse.json({ error: "No active deposits to pool." }, { status: 400 });
 
   // Judges must be appointed by investors before funds can be locked.
   let appointedJudges: string[] = [];
@@ -24,6 +27,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
   if (appointedJudges.length === 0) {
     return NextResponse.json({ error: "Investors must appoint at least one judge before pooling." }, { status: 400 });
+  }
+
+  // Funding must reach the builder's minimum, unless the builder accepted a partial raise.
+  const goal = BigInt(project.fundingGoal);
+  const minRequired = (goal * BigInt((project as any).minFundingBps ?? 10000)) / BigInt(10000);
+  if (totalBig < minRequired && !(project as any).builderAcceptedPartial) {
+    const pct = Math.round(((project as any).minFundingBps ?? 10000) / 100);
+    return NextResponse.json({ error: `Raised ${(Number(total) / 1e6).toFixed(0)} of the ${pct}% minimum (${(Number(minRequired) / 1e6).toFixed(0)} USDCx). Wait for more or accept the partial raise.` }, { status: 400 });
   }
 
   // Lock 100% until deadline + dispute window
