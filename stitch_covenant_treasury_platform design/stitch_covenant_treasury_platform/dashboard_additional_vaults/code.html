@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Covenant Treasury Platform - Secondary Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&amp;family=Public+Sans:wght@400;700&amp;family=Source+Serif+4:wght@600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-surface-variant": "#424848",
+                      "surface-container-low": "#f0f3ff",
+                      "tertiary-container": "#cba649",
+                      "primary-fixed-dim": "#b7caca",
+                      "on-tertiary": "#ffffff",
+                      "surface-container-highest": "#d8e3fa",
+                      "on-secondary": "#ffffff",
+                      "on-tertiary-container": "#503c00",
+                      "tertiary-fixed-dim": "#e9c261",
+                      "primary": "#000000",
+                      "surface-variant": "#d8e3fa",
+                      "on-tertiary-fixed": "#251a00",
+                      "secondary": "#a83635",
+                      "secondary-fixed": "#ffdad7",
+                      "secondary-container": "#ff7670",
+                      "inverse-surface": "#263142",
+                      "on-surface": "#111c2c",
+                      "on-secondary-container": "#720b12",
+                      "primary-fixed": "#d3e6e6",
+                      "tertiary": "#765a00",
+                      "outline-variant": "#c2c8c7",
+                      "surface-container-lowest": "#ffffff",
+                      "surface-bright": "#f9f9ff",
+                      "on-secondary-fixed": "#410004",
+                      "on-error-container": "#93000a",
+                      "on-primary-container": "#758787",
+                      "surface-dim": "#cfdaf1",
+                      "surface-container": "#e7eeff",
+                      "secondary-fixed-dim": "#ffb3ae",
+                      "on-background": "#111c2c",
+                      "primary-container": "#0c1e1e",
+                      "outline": "#727878",
+                      "error-container": "#ffdad6",
+                      "background": "#f9f9ff",
+                      "inverse-primary": "#b7caca",
+                      "surface-container-high": "#dee8ff",
+                      "surface": "#f9f9ff",
+                      "on-primary-fixed-variant": "#384a4a",
+                      "tertiary-fixed": "#ffdf96",
+                      "surface-tint": "#506261",
+                      "on-primary-fixed": "#0c1e1e",
+                      "error": "#ba1a1a",
+                      "on-primary": "#ffffff",
+                      "on-tertiary-fixed-variant": "#5a4400",
+                      "inverse-on-surface": "#ebf1ff",
+                      "on-error": "#ffffff",
+                      "on-secondary-fixed-variant": "#881e20"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.125rem",
+                      "lg": "0.25rem",
+                      "xl": "0.5rem",
+                      "full": "0.75rem"
+              },
+              "spacing": {
+                      "gutter": "24px",
+                      "unit": "8px",
+                      "margin-mobile": "16px",
+                      "container-max": "1200px",
+                      "margin-desktop": "40px"
+              },
+              "fontFamily": {
+                      "data-lg": [
+                              "JetBrains Mono"
+                      ],
+                      "display-lg-mobile": [
+                              "\"Source Serif 4\""
+                      ],
+                      "data-sm": [
+                              "JetBrains Mono"
+                      ],
+                      "headline-md": [
+                              "\"Source Serif 4\""
+                      ],
+                      "body-md": [
+                              "Public Sans"
+                      ],
+                      "body-lg": [
+                              "Public Sans"
+                      ],
+                      "display-lg": [
+                              "\"Source Serif 4\""
+                      ],
+                      "label-caps": [
+                              "Public Sans"
+                      ]
+              },
+              "fontSize": {
+                      "data-lg": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "letterSpacing": "-0.01em",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "display-lg-mobile": [
+                              "32px",
+                              {
+                                      "lineHeight": "40px",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "data-sm": [
+                              "13px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-md": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-md": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "body-lg": [
+                              "18px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "display-lg": [
+                              "48px",
+                              {
+                                      "lineHeight": "56px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "label-caps": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "letterSpacing": "0.08em",
+                                      "fontWeight": "700"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+      </script>
+<style>
+        body {
+            background-color: #F9F7F2; /* Parchment */
+            color: #111c2c;
+        }
+        .texture-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 50;
+            opacity: 0.4;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+        }
+        .rule-line {
+            border-bottom: 1px solid rgba(11, 29, 29, 0.1); /* Ink at 10% */
+        }
+        .rule-line-strong {
+            border-bottom: 1px solid rgba(11, 29, 29, 0.2);
+        }
+        .vault-card {
+            border: 1px solid rgba(11, 29, 29, 0.1);
+            transition: background-color 0.2s ease;
+        }
+        .vault-card:hover {
+            background-color: rgba(11, 29, 29, 0.02);
+        }
+        .stamp-resolved {
+            border: 1px solid #B79438;
+            color: #B79438;
+        }
+        .stamp-open {
+            border: 1px solid #0B1D1D;
+            color: #0B1D1D;
+        }
+      </style>
+</head>
+<body class="min-h-screen flex flex-col font-body-md text-body-md">
+<div class="texture-overlay"></div>
+<!-- TopNavBar -->
+<header class="w-full top-0 sticky z-40 bg-surface border-b border-on-surface/10">
+<div class="flex justify-between items-center w-full px-gutter py-4 max-w-container-max mx-auto">
+<div class="text-headline-md font-headline-md font-bold tracking-tighter text-primary">
+                COVENANT
+            </div>
+<nav class="hidden md:flex gap-8 items-center">
+<a class="text-primary border-b-2 border-primary pb-1 font-label-caps text-label-caps opacity-80 scale-95 transition-all" href="#">Vaults</a>
+<a class="text-on-surface-variant font-label-caps text-label-caps hover:text-primary transition-colors duration-200" href="#">My Covenants</a>
+<a class="text-on-surface-variant font-label-caps text-label-caps hover:text-primary transition-colors duration-200" href="#">Docs</a>
+</nav>
+<button class="bg-primary-container text-on-primary font-label-caps text-label-caps px-6 py-2 hover:opacity-90 transition-opacity">
+                CONNECT WALLET
+            </button>
+</div>
+</header>
+<main class="flex-grow w-full max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop py-12">
+<div class="mb-12 rule-line-strong pb-8">
+<h1 class="font-display-lg-mobile md:font-display-lg text-display-lg-mobile md:text-display-lg mb-4">Secondary Vaults</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-2xl">
+                Specialized ledgers for operational and protective asset management. Ensure compliance and liquidity across specific organizational functions.
+            </p>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
+<!-- Sidebar Navigation (Desktop) / Tabs (Mobile) -->
+<div class="lg:col-span-3 mb-8 lg:mb-0">
+<div class="flex flex-row lg:flex-col gap-4 overflow-x-auto lg:overflow-visible pb-4 lg:pb-0 sticky top-[100px]">
+<a class="whitespace-nowrap px-4 py-2 text-primary border-b-2 lg:border-b-0 lg:border-l-2 border-primary font-label-caps text-label-caps" href="#">
+                        All Secondary
+                    </a>
+<a class="whitespace-nowrap px-4 py-2 text-on-surface-variant hover:text-primary font-label-caps text-label-caps lg:border-l-2 border-transparent hover:border-primary/30 transition-colors" href="#">
+                        Payroll Vaults
+                    </a>
+<a class="whitespace-nowrap px-4 py-2 text-on-surface-variant hover:text-primary font-label-caps text-label-caps lg:border-l-2 border-transparent hover:border-primary/30 transition-colors" href="#">
+                        Reputation Vaults
+                    </a>
+<a class="whitespace-nowrap px-4 py-2 text-on-surface-variant hover:text-primary font-label-caps text-label-caps lg:border-l-2 border-transparent hover:border-primary/30 transition-colors" href="#">
+                        Insurance Vaults
+                    </a>
+</div>
+</div>
+<!-- Main Content Area -->
+<div class="lg:col-span-9 space-y-16">
+<!-- Payroll Section -->
+<section>
+<div class="flex items-baseline justify-between mb-6 rule-line pb-2">
+<h2 class="font-headline-md text-headline-md">Payroll Configurations</h2>
+<span class="font-data-sm text-data-sm text-on-surface-variant">3 Active</span>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+<!-- Card 1 -->
+<div class="vault-card p-6 rounded bg-surface">
+<div class="flex justify-between items-start mb-8">
+<div>
+<h3 class="font-label-caps text-label-caps text-on-surface-variant mb-1">CONTRACT ID</h3>
+<div class="font-data-lg text-data-lg">PRL-2024-Q3-ALPHA</div>
+</div>
+<div class="stamp-open px-3 py-1 rounded-full font-label-caps text-[10px] tracking-wider transform -rotate-2">
+                                    DISBURSING
+                                </div>
+</div>
+<div class="space-y-4 rule-line-strong pb-6 mb-6">
+<div class="flex justify-between">
+<span class="font-body-md text-on-surface-variant">Allocated Funds</span>
+<span class="font-data-lg text-data-lg">1,450,000.00 USDC</span>
+</div>
+<div class="flex justify-between">
+<span class="font-body-md text-on-surface-variant">Next Epoch</span>
+<span class="font-data-sm text-data-sm">Oct 15, 2024</span>
+</div>
+</div>
+<button class="w-full border border-primary text-primary py-2 font-label-caps text-label-caps hover:bg-primary/5 transition-colors">
+                                REVIEW LEDGER
+                            </button>
+</div>
+<!-- Card 2 -->
+<div class="vault-card p-6 rounded bg-surface">
+<div class="flex justify-between items-start mb-8">
+<div>
+<h3 class="font-label-caps text-label-caps text-on-surface-variant mb-1">CONTRACT ID</h3>
+<div class="font-data-lg text-data-lg">PRL-EXEC-BONUS-24</div>
+</div>
+<div class="stamp-resolved px-3 py-1 rounded-full font-label-caps text-[10px] tracking-wider transform rotate-1">
+                                    LOCKED
+                                </div>
+</div>
+<div class="space-y-4 rule-line-strong pb-6 mb-6">
+<div class="flex justify-between">
+<span class="font-body-md text-on-surface-variant">Allocated Funds</span>
+<span class="font-data-lg text-data-lg">500,000.00 USDC</span>
+</div>
+<div class="flex justify-between">
+<span class="font-body-md text-on-surface-variant">Unlock Condition</span>
+<span class="font-data-sm text-data-sm">KPI Multi-sig</span>
+</div>
+</div>
+<button class="w-full border border-primary text-primary py-2 font-label-caps text-label-caps hover:bg-primary/5 transition-colors">
+                                VIEW TERMS
+                            </button>
+</div>
+</div>
+</section>
+<!-- Reputation Section -->
+<section>
+<div class="flex items-baseline justify-between mb-6 rule-line pb-2">
+<h2 class="font-headline-md text-headline-md">Reputation Staking</h2>
+<span class="font-data-sm text-data-sm text-on-surface-variant">1 Active</span>
+</div>
+<div class="vault-card p-0 rounded bg-surface overflow-hidden">
+<div class="p-6 md:p-8 flex flex-col md:flex-row gap-8 items-start md:items-center">
+<div class="flex-grow space-y-2">
+<h3 class="font-label-caps text-label-caps text-on-surface-variant">STAKING CONTRACT</h3>
+<div class="font-data-lg text-data-lg text-2xl">REP-V2-GOVERNANCE</div>
+<p class="font-body-md text-on-surface-variant max-w-lg mt-2">
+                                    Tokens locked to participate in protocol governance and validator selection. Slashing conditions apply for malicious behavior.
+                                </p>
+</div>
+<div class="flex flex-col gap-4 min-w-[200px] border-l border-on-surface/10 pl-0 md:pl-8 pt-4 md:pt-0 rule-line md:border-b-0 w-full md:w-auto">
+<div>
+<div class="font-label-caps text-label-caps text-on-surface-variant mb-1">STAKED AMOUNT</div>
+<div class="font-data-lg text-data-lg">25,000.00 COV</div>
+</div>
+<div>
+<div class="font-label-caps text-label-caps text-on-surface-variant mb-1">VOTING POWER</div>
+<div class="font-data-lg text-data-lg">2.4%</div>
+</div>
+<button class="mt-2 bg-primary-container text-on-primary py-2 px-4 font-label-caps text-label-caps hover:opacity-90 transition-opacity">
+                                    MANAGE STAKE
+                                </button>
+</div>
+</div>
+</div>
+</section>
+<!-- Insurance Section -->
+<section>
+<div class="flex items-baseline justify-between mb-6 rule-line pb-2">
+<h2 class="font-headline-md text-headline-md">Insurance Coverage</h2>
+<span class="font-data-sm text-data-sm text-on-surface-variant">Coverage Active</span>
+</div>
+<div class="grid grid-cols-1 gap-4">
+<div class="vault-card p-4 rounded bg-surface flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-primary/50 text-3xl">shield</span>
+<div>
+<div class="font-data-lg text-data-lg">Smart Contract Exploit Cover</div>
+<div class="font-data-sm text-data-sm text-on-surface-variant">Provider: Nexus Mutual</div>
+</div>
+</div>
+<div class="text-right sm:text-left">
+<div class="font-label-caps text-label-caps text-on-surface-variant">COVER AMOUNT</div>
+<div class="font-data-lg text-data-lg">10,000,000.00 DAI</div>
+</div>
+<div class="stamp-resolved px-3 py-1 rounded-full font-label-caps text-[10px] tracking-wider">
+                                ACTIVE
+                            </div>
+</div>
+<div class="vault-card p-4 rounded bg-surface flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 opacity-75">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-primary/50 text-3xl">gavel</span>
+<div>
+<div class="font-data-lg text-data-lg">Slashing Penalty Protection</div>
+<div class="font-data-sm text-data-sm text-on-surface-variant">Provider: Unslashed</div>
+</div>
+</div>
+<div class="text-right sm:text-left">
+<div class="font-label-caps text-label-caps text-on-surface-variant">COVER AMOUNT</div>
+<div class="font-data-lg text-data-lg">500,000.00 USDC</div>
+</div>
+<div class="stamp-open px-3 py-1 rounded-full font-label-caps text-[10px] tracking-wider opacity-50">
+                                EXPIRED
+                            </div>
+</div>
+</div>
+</section>
+</div>
+</div>
+</main>
+<!-- Footer -->
+<footer class="w-full mt-auto bg-surface border-t border-on-surface/20">
+<div class="flex flex-col md:flex-row justify-between items-center w-full px-gutter py-8 max-w-container-max mx-auto">
+<div class="font-label-caps text-label-caps text-primary mb-4 md:mb-0">
+                © 2024 Covenant Treasury Platform. Powered by Stacks.
+            </div>
+<nav class="flex gap-6">
+<a class="text-on-surface-variant font-body-md text-body-md hover:text-primary transition-colors" href="#">Terms of Service</a>
+<a class="text-on-surface-variant font-body-md text-body-md hover:text-primary transition-colors" href="#">Privacy Policy</a>
+<a class="text-on-surface-variant font-body-md text-body-md hover:text-primary transition-colors" href="#">Security Audit</a>
+</nav>
+</div>
+</footer>
+</body></html>

@@ -1,0 +1,171 @@
+// Covenant Prisma Schema (SQLite for hackathon/demo)
+generator client {
+  provider = "prisma-client-js"
+  engineType = "library"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Project {
+  id                  String   @id @default(cuid())
+  title               String
+  description         String
+  fundingGoal         String   // micro units as string
+  milestoneDescription String
+  deadlineBlock       Int      // Stacks block height
+  disputeWindowBlocks Int      @default(144) // ~48h on testnet approx
+  builderAddress      String
+  treasuryAddress     String   // builder's receive addr, usually same or separate
+  status              String   @default("CREATED") // CREATED | BACKING_OPEN | POOLED_LOCKED | DISPUTE_WINDOW | RESOLVED_SUCCESS | RESOLVED_FAILURE
+  pooledTxid          String?  // tx when custodian pooled
+  pooledExplorerUrl   String?
+  withdrawTxid        String?
+  withdrawExplorerUrl String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  contributions       BackerContribution[]
+  attestations        JudgeAttestation[]
+  stateLogs           ProjectStateLog[]
+  distributions       Distribution[]
+}
+
+model BackerContribution {
+  id              String   @id @default(cuid())
+  projectId       String
+  principal       String   // backer STX addr
+  amount          String   // micro
+  depositTxid     String?  // user to custodian transfer tx (off-vault)
+  depositExplorerUrl String?
+  createdAt       DateTime @default(now())
+
+  project         Project  @relation(fields: [projectId], references: [id])
+}
+
+model JudgeAttestation {
+  id          String   @id @default(cuid())
+  projectId   String
+  judge       String   // configured judge principal
+  vote        String   // "MET" | "NOT_MET"
+  signature   String   // signed message for verification
+  signedAt    DateTime @default(now())
+
+  project     Project  @relation(fields: [projectId], references: [id])
+
+  @@unique([projectId, judge])
+}
+
+model ProjectStateLog {
+  id          String   @id @default(cuid())
+  projectId   String
+  status      String
+  note        String?
+  txid        String?
+  explorerUrl String?
+  timestamp   DateTime @default(now())
+
+  project     Project  @relation(fields: [projectId], references: [id])
+}
+
+model Distribution {
+  id              String   @id @default(cuid())
+  projectId       String
+  recipient       String
+  amount          String
+  txid            String
+  explorerUrl     String
+  kind            String   // "BUILDER_PAYOUT" | "BACKER_REWARD" | "REFUND"
+  createdAt       DateTime @default(now())
+
+  project         Project  @relation(fields: [projectId], references: [id])
+}
+
+// Reputation scores across any successful vault resolution
+model Reputation {
+  id          String   @id @default(cuid())
+  principal   String   @unique
+  score       Int      @default(0)  // +1 per successful resolution involving them
+  updatedAt   DateTime @updatedAt
+}
+
+// For Payroll Feature A
+model PayrollVault {
+  id                String   @id @default(cuid())
+  payerAddress      String
+  contributorAddress String
+  totalBudget       String
+  intervalAmount    String
+  startBlock        Int
+  endBlock          Int
+  lastReleasedBlock Int?
+  status            String   @default("ACTIVE") // ACTIVE | CLAWBACK | COMPLETED
+  clawbackTxid      String?
+  createdAt         DateTime @default(now())
+
+  checkIns          CheckIn[]
+}
+
+model CheckIn {
+  id              String   @id @default(cuid())
+  payrollId       String
+  principal       String
+  intervalBlock   Int
+  txid            String?
+  createdAt       DateTime @default(now())
+
+  payroll         PayrollVault @relation(fields: [payrollId], references: [id])
+}
+
+// For Reputation Vault Feature B
+model ReputationVault {
+  id                String @id @default(cuid())
+  title             String
+  totalAmount       String
+  lockUntilBlock    Int
+  status            String @default("OPEN")
+  pooledTxid        String?
+  resolvedTxid      String?
+  createdAt         DateTime @default(now())
+  participants      ReputationVaultParticipant[]
+}
+
+model ReputationVaultParticipant {
+  id                String @id @default(cuid())
+  vaultId           String
+  principal         String
+  reputationAtTime  Int
+  computedShareBps  Int   // basis points of total
+  vault             ReputationVault @relation(fields: [vaultId], references: [id])
+}
+
+// For Insurance Pool Feature C
+model InsurancePool {
+  id               String  @id @default(cuid())
+  title            String
+  triggerCondition String  // e.g. "INCIDENT_DECLARED"
+  lockUntilBlock   Int
+  returnOnExpiry   String  @default("REFUND") // REFUND | ROLL
+  status           String  @default("OPEN")
+  pooledTxid       String?
+  resolvedTxid     String?
+  createdAt        DateTime @default(now())
+
+  contributions    InsuranceContribution[]
+}
+
+model InsuranceContribution {
+  id            String   @id @default(cuid())
+  poolId        String
+  principal     String
+  amount        String
+  pool          InsurancePool @relation(fields: [poolId], references: [id])
+}
+
+model InsuranceClaim {
+  id        String @id @default(cuid())
+  poolId    String
+  principal String
+  amount    String?
+}

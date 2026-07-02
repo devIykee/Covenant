@@ -1,0 +1,242 @@
+@import "tailwindcss";
+
+:root {
+  /* Covenant Design System - Parchment / Ledger */
+  --parchment: #F9F7F2;
+  --ink: #0B1D1D;
+  --signet: #9B2C2C;
+  --brass: #B79438;
+  --surface: #f9f9ff;
+  --on-surface: #111c2c;
+  --on-surface-variant: #424848;
+  --surface-container-lowest: #ffffff;
+  --surface-container-low: #f0f3ff;
+  --surface-container: #e7eeff;
+  --surface-container-high: #dee8ff;
+  --outline: #727878;
+  --outline-variant: #c2c8c7;
+
+  /* Typography fallbacks */
+  --font-display: "Source Serif 4", serif;
+  --font-body: "Public Sans", system-ui, sans-serif;
+  --font-data: "JetBrains Mono", ui-monospace, monospace;
+}
+
+body {
+  background-color: var(--parchment);
+  color: var(--ink);
+  font-family: var(--font-body);
+}
+
+/* Font families */
+.font-display-lg,
+.font-display-lg-mobile,
+.font-headline-md {
+  font-family: var(--font-display);
+  font-feature-settings: "tnum";
+}
+
+.font-body-lg,
+.font-body-md {
+  font-family: var(--font-body);
+}
+
+.font-data-lg,
+.font-data-sm {
+  font-family: var(--font-data);
+  font-feature-settings: "tnum";
+}
+
+.font-label-caps {
+  font-family: var(--font-body);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+}
+
+/* Ruled lines (ledger aesthetic) */
+.rule-line,
+.rule-line-minor {
+  border-bottom: 1px solid rgba(11, 29, 29, 0.1);
+}
+.rule-line-major,
+.rule-line-strong {
+  border-bottom: 1px solid rgba(11, 29, 29, 0.2);
+}
+
+/* Card / container */
+.card-container,
+.vault-card {
+  background-color: #F9F7F2;
+  border: 1px solid rgba(11, 29, 29, 0.1);
+  border-radius: 0.125rem; /* sm */
+  box-shadow: 2px 2px 0px rgba(11, 29, 29, 0.05);
+}
+
+/* Input like ledger form lines */
+.input-line {
+  border: none;
+  border-bottom: 1px solid rgba(11, 29, 29, 0.5);
+  background-color: rgba(11, 29, 29, 0.02);
+  border-radius: 0;
+}
+.input-line:focus {
+  outline: none;
+  border-bottom: 2px solid #0B1D1D;
+  background-color: rgba(11, 29, 29, 0.05);
+}
+
+/* Signature Stamps */
+.stamp-open {
+  border: 2px solid #0B1D1D;
+  color: #0B1D1D;
+  transform: rotate(-5deg);
+}
+.stamp-locked {
+  background-color: #9B2C2C;
+  color: #F9F7F2;
+  transform: rotate(3deg);
+}
+.stamp-resolved {
+  border: 2px solid #B79438;
+  color: #B79438;
+  transform: rotate(-2deg);
+}
+.stamp-refunded {
+  border: 2px solid #a83635;
+  color: #a83635;
+  transform: rotate(10deg);
+}
+
+/* Progress bar thin ledger style */
+.progress-bar {
+  height: 3px;
+  background-color: rgba(11, 29, 29, 0.1);
+  border: 1px solid rgba(11, 29, 29, 0.1);
+}
+.progress-fill {
+  height: 100%;
+  background-color: #0B1D1D;
+}
+.progress-brass {
+  background-color: #B79438;
+}
+
+/* Timeline */
+.timeline-item {
+  position: relative;
+}
+.timeline-item::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  top: 8px;
+  bottom: -12px;
+  width: 1px;
+  background: rgba(11, 29, 29, 0.2);
+}
+.timeline-item:last-child::before {
+  display: none;
+}
+.timeline-dot {
+  width: 10px;
+  height: 10px;
+  border: 2px solid #0B1D1D;
+  background: #F9F7F2;
+  border-radius: 9999px;
+}
+.timeline-dot.active {
+  background: #0B1D1D;
+}
+
+/* Buttons */
+.btn-primary {
+  background-color: #0B1D1D;
+  color: #F9F7F2;
+  font-family: var(--font-body);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.125rem;
+  transition: all 0.1s ease;
+}
+.btn-primary:hover {
+  background-color: rgba(11, 29, 29, 0.9);
+}
+.btn-secondary {
+  border: 1px solid #0B1D1D;
+  color: #0B1D1D;
+  background: transparent;
+  font-family: var(--font-body);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.125rem;
+  transition: all 0.1s ease;
+}
+.btn-secondary:hover {
+  background-color: #0B1D1D;
+  color: #F9F7F2;
+}
+
+/* Tables / ledgers */
+.data-table th {
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--on-surface-variant);
+}
+.data-table td {
+  font-family: var(--font-data);
+  font-size: 13px;
+}
+
+/* Explorer links */
+.explorer-link {
+  color: var(--on-surface-variant);
+  transition: color 0.1s;
+}
+.explorer-link:hover {
+  color: #0B1D1D;
+}
+
+/* Status badges */
+.status-badge {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 2px 10px;
+  border-radius: 999px;
+}
+
+/* Container */
+.container-max {
+  max-width: 1200px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Noise / texture for paper feel (optional subtle) */
+.paper-texture {
+  background-image: 
+    linear-gradient(rgba(11,29,29,0.015) 1px, transparent 1px);
+  background-size: 4px 4px;
+}
+
+/* Wallet connect button */
+.wallet-btn {
+  background-color: #0B1D1D;
+  color: #F9F7F2;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 10px 20px;
+  transition: opacity 0.1s;
+}
+.wallet-btn:hover {
+  opacity: 0.9;
+}
