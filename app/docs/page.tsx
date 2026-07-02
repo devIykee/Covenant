@@ -137,9 +137,11 @@ export default function DocsPage() {
                   It calls <code className="font-data-sm">set-routing-rules</code> + <code className="font-data-sm">deposit</code>,
                   locking 100% until the deadline block. This is the real on-chain programmable behavior.
                 </Step>
-                <Step n={3} title="Judges attest the outcome (2-of-3 multisig)">
-                  Trusted addresses sign &ldquo;met&rdquo; or &ldquo;not met.&rdquo; A dispute window follows so
-                  investors can challenge before funds move.
+                <Step n={3} title="Invited judges attest the outcome (2-of-N multisig)">
+                  When you create a covenant you <strong className="text-[var(--ink)]">invite independent judges by address</strong>.
+                  Each judge opens the covenant link, connects their wallet, and <strong className="text-[var(--ink)]">cryptographically signs</strong> their
+                  &ldquo;met&rdquo; / &ldquo;not met&rdquo; vote — the server verifies the signature against their address, so no one
+                  can vote on their behalf. Once 2-of-N sign MET, a dispute window opens before funds move.
                 </Step>
                 <Step n={4} title="The custodian withdraws and distributes">
                   After the lock passes, it calls <code className="font-data-sm">withdraw</code> and sends tracked
@@ -246,7 +248,8 @@ STACKS_PRIVATE_KEY   (your funded custodian key)`}</Code>
                 <code className="font-data-sm">set-routing-rules</code> + <code className="font-data-sm">deposit</code>, locking 100%.
               </Step>
               <Step n={5} title="Judges attest, dispute window opens">
-                In the judge panel, submit 2-of-3 &ldquo;MET&rdquo; attestations. The covenant moves to the dispute window.
+                Copy the <strong className="text-[var(--ink)]">judge invite link</strong> from the judge panel and send it to your judges.
+                Each connects their wallet and signs a vote. Once 2-of-N sign &ldquo;MET,&rdquo; the covenant moves to the dispute window.
               </Step>
               <Step n={6} title="Resolve">
                 Choose <strong className="text-[var(--ink)]">Resolve Success</strong> (80/20) or <strong className="text-[var(--ink)]">Resolve Failure</strong>{" "}
@@ -260,27 +263,28 @@ STACKS_PRIVATE_KEY   (your funded custodian key)`}</Code>
 
           {/* 6. Vault types */}
           <section id="vaulttypes" className="scroll-mt-24">
-            <h2 className="font-headline-md text-2xl mb-3">6. The four vault types</h2>
+            <h2 className="font-headline-md text-2xl mb-3">6. The four vault types (all live on testnet)</h2>
+            <p className="text-sm text-[var(--on-surface-variant)] mb-4">Every type executes real on-chain USDCx transfers through the shared escrow custodian.</p>
             <div className="grid sm:grid-cols-2 gap-4">
               <Link href="/projects" className="card-container p-5 block hover:opacity-80 transition-opacity">
-                <div className="font-label-caps text-xs text-[var(--on-surface-variant)]">PRIMARY</div>
+                <div className="font-label-caps text-xs text-[var(--on-surface-variant)]">MILESTONE · LIVE</div>
                 <div className="font-semibold mt-1">Milestone-Gated Vault</div>
-                <p className="text-sm text-[var(--on-surface-variant)] mt-1">Pooled funding released only when judges attest a milestone is met, with a dispute window.</p>
+                <p className="text-sm text-[var(--on-surface-variant)] mt-1">Pooled funding released only when invited judges cryptographically sign that a milestone is met, with a dispute window.</p>
               </Link>
               <Link href="/vaults/payroll" className="card-container p-5 block hover:opacity-80 transition-opacity">
-                <div className="font-label-caps text-xs text-[var(--on-surface-variant)]">PAYROLL</div>
+                <div className="font-label-caps text-xs text-[var(--on-surface-variant)]">PAYROLL · LIVE</div>
                 <div className="font-semibold mt-1">Streaming Payroll + Clawback</div>
-                <p className="text-sm text-[var(--on-surface-variant)] mt-1">Budget streams at intervals; a missed check-in claws the remainder back to the investor.</p>
+                <p className="text-sm text-[var(--on-surface-variant)] mt-1">Each contributor check-in releases a real USDCx payment; a missed check-in claws the remainder back to the payer.</p>
               </Link>
               <Link href="/vaults/reputation" className="card-container p-5 block hover:opacity-80 transition-opacity">
-                <div className="font-label-caps text-xs text-[var(--on-surface-variant)]">REPUTATION</div>
+                <div className="font-label-caps text-xs text-[var(--on-surface-variant)]">REPUTATION · LIVE</div>
                 <div className="font-semibold mt-1">Reputation-Weighted Split</div>
-                <p className="text-sm text-[var(--on-surface-variant)] mt-1">Split percentages computed automatically from each participant&rsquo;s track record.</p>
+                <p className="text-sm text-[var(--on-surface-variant)] mt-1">Split percentages computed automatically from each participant&rsquo;s reputation, then paid out pro-rata on-chain.</p>
               </Link>
               <Link href="/vaults/insurance" className="card-container p-5 block hover:opacity-80 transition-opacity">
-                <div className="font-label-caps text-xs text-[var(--on-surface-variant)]">INSURANCE</div>
+                <div className="font-label-caps text-xs text-[var(--on-surface-variant)]">INSURANCE · LIVE</div>
                 <div className="font-semibold mt-1">Parametric Insurance Pool</div>
-                <p className="text-sm text-[var(--on-surface-variant)] mt-1">Pooled premiums pay out on a judge-declared incident, or refund/roll on expiry.</p>
+                <p className="text-sm text-[var(--on-surface-variant)] mt-1">Pooled premiums pay the claimant on a declared incident, or refund/roll on expiry — all real transfers.</p>
               </Link>
             </div>
           </section>

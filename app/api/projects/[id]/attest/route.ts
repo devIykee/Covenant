@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/src/lib/db";
+import { verifyMessageSignatureRsv } from "@stacks/encryption";
+import { getAddressFromPublicKey } from "@stacks/transactions";
+import { FLOWVAULT_NETWORK } from "@/src/lib/flowvault";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { judge, vote, signature } = await req.json();
+  const { judge, vote, signature, publicKey } = await req.json();
 
-  if (!judge || !vote || !signature) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
+  if (!judge || !vote || !signature || !publicKey) return NextResponse.json({ error: "Missing judge, vote, signature, or publicKey" }, { status: 400 });
   if (!["MET", "NOT_MET"].includes(vote)) return NextResponse.json({ error: "Bad vote" }, { status: 400 });
 
   const project = await db.project.findUnique({ where: { id } });
@@ -27,9 +30,32 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!invitedJudges.includes(judge)) {
     return NextResponse.json({ error: "This address is not an invited judge for this covenant." }, { status: 403 });
   }
+
+  // Cryptographically verify the vote was signed by the wallet that owns `judge`.
+  // The message is reconstructed server-side so a client can't sign a different one.
+  const message = `Covenant ${id} milestone: ${vote}`;
+  let signatureValid = false;
+  try {
+    signatureValid = verifyMessageSignatureRsv({ message, signature, publicKey });
+  } catch {
+    signatureValid = false;
+  }
+  if (!signatureValid) {
+    return NextResponse.json({ error: "Signature verification failed." }, { status: 401 });
+  }
+  let signerAddress = "";
+  try {
+    signerAddress = getAddressFromPublicKey(publicKey, FLOWVAULT_NETWORK);
+  } catch {
+    signerAddress = "";
+  }
+  if (signerAddress !== judge) {
+    return NextResponse.json({ error: "The signature does not match the invited judge's address." }, { status: 401 });
+  }
+
   const threshold = Math.min(2, invitedJudges.length);
 
-  // Upsert attestation
+  // Upsert attestation (store the verified signature).
   await db.judgeAttestation.upsert({
     where: { projectId_judge: { projectId: id, judge } },
     create: { projectId: id, judge, vote, signature },

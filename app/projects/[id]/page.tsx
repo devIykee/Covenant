@@ -68,7 +68,6 @@ export default function ProjectDetail() {
   const [copiedCustodian, setCopiedCustodian] = useState(false);
 
   const [connectedAddr, setConnectedAddr] = useState<string | null>(null);
-  const [actingJudge, setActingJudge] = useState<string>("");
   const [isAttesting, setIsAttesting] = useState(false);
   const [pageUrl, setPageUrl] = useState("");
   const [linkCopied, setLinkCopied] = useState(false);
@@ -101,15 +100,6 @@ export default function ProjectDetail() {
     setTimeout(() => setLinkCopied(false), 1500);
   }
 
-  // Default the "attest as" selection: your own address if you're a judge, else the first judge.
-  useEffect(() => {
-    if (!invitedJudges.length) {
-      setActingJudge("");
-      return;
-    }
-    setActingJudge(youAreJudge ? (connectedAddr as string) : invitedJudges[0]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project, connectedAddr]);
 
   async function loadProject() {
     try {
@@ -292,30 +282,40 @@ export default function ProjectDetail() {
   }
 
   async function handleJudgeAttest(vote: "MET" | "NOT_MET") {
-    const judge = actingJudge || invitedJudges[0];
-    if (!judge) {
-      toast.error("No judges have been invited for this covenant.");
+    if (!connectedAddr) {
+      toast.error("Connect your wallet to attest.");
       return;
     }
+    if (!youAreJudge) {
+      toast.error("Your connected wallet isn't an invited judge for this covenant.");
+      return;
+    }
+    const judge = connectedAddr;
     setIsAttesting(true);
     try {
-      // The server checks the judge is one of the authorized addresses. In a full
-      // build this would also verify a wallet signature of `message`.
+      // The judge signs the exact vote with their wallet; the server verifies the
+      // signature against their address before recording it (trustless attestation).
       const message = `Covenant ${projectId} milestone: ${vote}`;
+      const signed: any = await request("stx_signMessage", { message });
+      const signature = signed?.signature || signed?.result?.signature;
+      const publicKey = signed?.publicKey || signed?.result?.publicKey;
+      if (!signature || !publicKey) throw new Error("Wallet did not return a signature.");
+
       const res = await fetch(`/api/projects/${projectId}/attest`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ judge, vote, signature: "demo-signature-" + Date.now(), message }),
+        body: JSON.stringify({ judge, vote, signature, publicKey }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || "Attestation failed");
       }
       const data = await res.json().catch(() => ({}));
-      toast.success(`Judge attested "${vote}". ${data.metCount ?? 0} of 3 say MET.`);
+      toast.success(`Vote signed & verified: "${vote}". ${data.metCount ?? 0} of ${data.totalJudges ?? "?"} say MET.`);
       await loadProject();
     } catch (e: any) {
-      toast.error(e.message);
+      if (/reject|cancel|deny/i.test(e?.message || "")) toast.error("Signature cancelled.");
+      else toast.error(e.message);
     } finally {
       setIsAttesting(false);
     }
@@ -491,23 +491,21 @@ export default function ProjectDetail() {
                           </p>
                         </div>
 
-                        <label className="block font-label-caps text-[10px] text-[var(--on-surface-variant)] mb-1">ATTEST AS</label>
-                        <select
-                          value={actingJudge}
-                          onChange={(e) => setActingJudge(e.target.value)}
-                          className="input-line w-full py-2 mb-3 text-sm font-data-sm bg-transparent"
-                        >
-                          {invitedJudges.map((j, i) => (
-                            <option key={i} value={j}>
-                              Judge {i + 1} — {j.slice(0, 10)}…{j.slice(-4)}{connectedAddr === j ? " (you)" : ""}
-                            </option>
-                          ))}
-                        </select>
-
-                        <div className="flex gap-3">
-                          <button onClick={() => handleJudgeAttest("NOT_MET")} disabled={isAttesting} className="btn-secondary flex-1 text-sm py-2 disabled:opacity-50">ATTEST: NOT MET</button>
-                          <button onClick={() => handleJudgeAttest("MET")} disabled={isAttesting} className="btn-primary flex-1 text-sm py-2 disabled:opacity-50">ATTEST: MET</button>
-                        </div>
+                        {youAreJudge ? (
+                          <>
+                            <p className="text-[11px] text-[var(--on-surface-variant)] mb-2">
+                              Attesting as <span className="font-data-sm text-[var(--ink)]">{connectedAddr?.slice(0, 10)}…{connectedAddr?.slice(-4)}</span>. Your wallet will sign the vote and the server verifies the signature.
+                            </p>
+                            <div className="flex gap-3">
+                              <button onClick={() => handleJudgeAttest("NOT_MET")} disabled={isAttesting} className="btn-secondary flex-1 text-sm py-2 disabled:opacity-50">{isAttesting ? "SIGNING…" : "ATTEST: NOT MET"}</button>
+                              <button onClick={() => handleJudgeAttest("MET")} disabled={isAttesting} className="btn-primary flex-1 text-sm py-2 disabled:opacity-50">{isAttesting ? "SIGNING…" : "ATTEST: MET"}</button>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="border border-dashed border-[var(--ink)]/20 rounded-sm p-3 text-[11px] text-[var(--on-surface-variant)]">
+                            Only invited judges can attest. Connect one of the invited judge wallets (top-right) to sign a vote.
+                          </div>
+                        )}
                       </>
                     )}
                   </>

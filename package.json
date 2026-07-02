@@ -17,6 +17,7 @@
     "@prisma/adapter-libsql": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "@stacks/connect": "^8.2.6",
+    "@stacks/encryption": "^7.5.0",
     "@stacks/network": "^7.5.0",
     "@stacks/transactions": "^7.5.0",
     "date-fns": "^4.4.0",

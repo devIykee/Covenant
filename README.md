@@ -262,13 +262,18 @@ Now go record that demo video — you have everything you need.
 - [ ] Successful testnet tx (requires funded custodian key + real USDCx sends)
 - [x] Explicit use of SDK/contract methods documented
 
-## Additional Features (A/B/C)
+## Vault Types (all live on testnet)
 
-- Payroll Vault (A): streaming releases + clawback on missed check-in
-- Reputation Vault (B): auto-weighted splits from reputation scores
-- Insurance Pool (C): judge-triggered parametric payouts
+Every vault type executes real on-chain USDCx transfers through the shared escrow custodian (`src/lib/escrow.ts`):
 
-These reuse `src/lib/escrow.ts`.
+- **Milestone Vault** (primary): pooled funding released only when invited judges sign a 2-of-N attestation, with a dispute window.
+- **Payroll Vault**: each contributor check-in releases a real USDCx payment; a missed check-in claws the remainder back to the payer.
+- **Reputation Vault**: split % auto-computed from each participant's reputation score, then paid pro-rata on-chain.
+- **Insurance Pool**: pooled premiums pay the claimant on a declared incident, or refund/roll on expiry.
+
+## Judge Attestation (trustless)
+
+Judges are **invited per-project by the builder** (independent verifiers, not the builder). Each judge opens the covenant's invite link, connects their wallet, and **cryptographically signs** their MET/NOT-MET vote with `@stacks/connect`. The server **verifies the signature** (`@stacks/encryption` `verifyMessageSignatureRsv`) against the judge's address before recording it, and only invited judges count toward the 2-of-N threshold. A tampered vote fails verification.
 
 ## Tech
 
