@@ -96,7 +96,7 @@ export default async function CovenantHome() {
                           <span className="font-data-sm text-[var(--ink)]">{formatDeadline((p as any).deadlineAt, p.deadlineBlock)}</span>
                         </div>
                         <div className="flex justify-between py-1 text-sm">
-                          <span className="font-label-caps text-xs text-[var(--on-surface-variant)]">INVESTORS</span>
+                          <span className="font-label-caps text-xs text-[var(--on-surface-variant)]">BACKERS</span>
                           <span className="font-data-sm text-[var(--ink)]">{p.contributions.length}</span>
                         </div>
                       </div>
@@ -132,7 +132,7 @@ export default async function CovenantHome() {
             <div className="border border-[var(--ink)]/10 p-6 rounded-sm">
               <div className="font-label-caps text-xs mb-1 text-[var(--on-surface-variant)]">PAYROLL VAULT</div>
               <div className="font-semibold mb-1">Streaming Payroll with Clawback</div>
-              <p className="text-[var(--on-surface-variant)] text-sm">Time-locked streaming releases with activity check-ins. Missed check-in triggers clawback to investor.</p>
+              <p className="text-[var(--on-surface-variant)] text-sm">Time-locked streaming releases with activity check-ins. Missed check-in triggers clawback to backer.</p>
             </div>
             <div className="border border-[var(--ink)]/10 p-6 rounded-sm">
               <div className="font-label-caps text-xs mb-1 text-[var(--on-surface-variant)]">REPUTATION VAULT</div>

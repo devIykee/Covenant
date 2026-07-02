@@ -7,13 +7,27 @@ export const runtime = "nodejs";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { success } = await req.json(); // boolean
+  const body = await req.json();
+  const timeout = !!body.timeout; // deadline passed with no judge consensus
+  const success = timeout ? false : !!body.success; // timeout always refunds
 
   const project = await db.project.findUnique({
     where: { id },
-    include: { contributions: true },
+    include: { contributions: true, attestations: true },
   });
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  // Guard the timeout path: it's only valid once the deadline has passed AND the
+  // judges have NOT reached the 2-of-N MET consensus.
+  if (timeout) {
+    const deadlinePassed = project.deadlineAt ? new Date(project.deadlineAt).getTime() <= Date.now() : true;
+    let judges: string[] = [];
+    try { judges = JSON.parse((project as any).judges || "[]"); } catch { judges = []; }
+    const threshold = Math.min(2, judges.length || 2);
+    const metCount = project.attestations.filter((a) => a.vote === "MET" && judges.includes(a.judge)).length;
+    if (!deadlinePassed) return NextResponse.json({ error: "The deadline hasn't passed yet." }, { status: 400 });
+    if (metCount >= threshold) return NextResponse.json({ error: "Judges reached consensus — resolve as success instead of timeout." }, { status: 400 });
+  }
 
   // Only ACTIVE (non-withdrawn) deposits are part of the pool.
   const activeContribs = project.contributions.filter((c) => c.status !== "WITHDRAWN");
@@ -34,7 +48,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     });
 
     await db.projectStateLog.create({
-      data: { projectId: id, status: success ? "RESOLVED_SUCCESS" : "RESOLVED_FAILURE", txid: withdrawTxid, note: "Custodian withdrew from FlowVault" },
+      data: {
+        projectId: id,
+        status: success ? "RESOLVED_SUCCESS" : "RESOLVED_FAILURE",
+        txid: withdrawTxid,
+        note: timeout ? "Timeout — no 2-of-N judge consensus by the deadline; refunding backers" : "Custodian withdrew from FlowVault",
+      },
     });
 
     const txids: string[] = [withdrawTxid];

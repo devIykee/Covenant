@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 const PROJECTS_TOUR: TourStep[] = [
   { selector: "#tour-new-covenant", title: "Create a covenant", body: "Start a new milestone-gated vault: set a funding goal, a deadline, and invite the judges who'll verify the milestone." },
-  { selector: "#tour-projects-grid", title: "Your covenants", body: "Every covenant shows its funding progress, status, and investor count. Click one to fund it, attest, or resolve it." },
+  { selector: "#tour-projects-grid", title: "Your covenants", body: "Every covenant shows its funding progress, status, and backer count. Click one to fund it, attest, or resolve it." },
 ];
 
 export default async function ProjectsList() {
@@ -81,7 +81,7 @@ export default async function ProjectsList() {
                           <div className="font-data-sm text-[var(--ink)]">{deadlineLabel}</div>
                         </div>
                         <div className="text-right">
-                          <div className="text-[var(--on-surface-variant)]">INVESTORS</div>
+                          <div className="text-[var(--on-surface-variant)]">BACKERS</div>
                           <div className="font-data-sm text-[var(--ink)]">{p.contributions.length}</div>
                         </div>
                       </div>

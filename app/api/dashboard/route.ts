@@ -6,10 +6,10 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 // Returns everything relevant to one wallet: campaigns they built, and campaigns
-// they invested in. "raised" counts only ACTIVE (non-withdrawn) contributions.
+// they backed. "raised" counts only ACTIVE (non-withdrawn) contributions.
 export async function GET(req: NextRequest) {
   const address = req.nextUrl.searchParams.get("address") || "";
-  if (!address) return NextResponse.json({ asBuilder: [], asInvestor: [] });
+  if (!address) return NextResponse.json({ asBuilder: [], asBacker: [] });
 
   const projects = await db.project
     .findMany({ orderBy: { createdAt: "desc" }, include: { contributions: true } })
@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
       minRequired: minRequired.toString(),
       metMin,
       judgeCount: judges.length,
-      investors: active.map((c: any) => ({
+      backers: active.map((c: any) => ({
         principal: c.principal,
         amount: c.amount,
         depositExplorerUrl: c.depositExplorerUrl,
@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
   };
 
   const asBuilder = projects.filter((p: any) => eqAddr(p.builderAddress, address)).map(shape);
-  const asInvestor = projects
+  const asBacker = projects
     .filter((p: any) => p.contributions.some((c: any) => eqAddr(c.principal, address)))
     .map((p: any) => {
       const base = shape(p);
@@ -61,5 +61,5 @@ export async function GET(req: NextRequest) {
       return { ...base, myContribution: myActive.toString(), myWithdrawn };
     });
 
-  return NextResponse.json({ asBuilder, asInvestor });
+  return NextResponse.json({ asBuilder, asBacker });
 }

@@ -6,10 +6,11 @@
 
 Funds only move when real-world conditions are verifiably met.
 
-- **Primary feature**: Milestone-Gated Fundraising Vault (fully implemented end-to-end)
-- Uses FlowVault primitives for time-locking pooled capital and deterministic routing
-- Real on-chain testnet transactions via the escrow custodian pattern
-- Additional vault types: Payroll (streaming + clawback), Reputation-weighted, Parametric Insurance
+- **Flagship feature**: the **Milestone-Gated Grant** — backers fund a grant into escrow; it's only **disbursed** to the builder (80%, with 20% returned to backers) when independent judges verify the milestone.
+- Uses FlowVault primitives for time-locking pooled capital and deterministic routing.
+- Real on-chain testnet transactions via the escrow custodian pattern.
+- **Grant framing, not investment**: backers fund a milestone grant; there are no financial returns — the 20% is a pro-rata return of unused pool, not a yield.
+- Secondary vault types: Payroll (streaming + clawback), Reputation-weighted, Parametric Insurance.
 
 ## FlowVault Integration (Required Deliverable)
 
@@ -30,7 +31,14 @@ FlowVault routing rules are fixed **at the moment of each deposit** by the depos
 1. Users (backers) send SIP-010 (USDCx) to a **known custodian address** (backend-controlled testnet key). These transfers are tracked in our DB against the project.
 2. The custodian account pools the funds into **its own FlowVault vault** for the covenant via `setRoutingRules` + `deposit`. This is where the **real programmable behavior** happens on-chain (lock and/or split).
 3. At resolution time (after attestations, lock height passed), custodian calls `withdraw()` to unlock.
-4. Custodian then executes tracked SIP-010 transfers (via `@stacks/transactions`) to the correct parties based on application-level decision (success 80/20 vs full refund).
+4. Custodian then executes tracked SIP-010 transfers (via `@stacks/transactions`) to the correct parties based on the application-level outcome:
+   - **Milestone met** (2-of-N judges signed MET): grant disbursed — 80% to the builder, 20% returned pro-rata to backers.
+   - **Milestone not met**: 100% refunded pro-rata to backers.
+   - **Timeout** (deadline passes with no 2-of-N consensus): app-layer safety rule — the grant is cancelled and backers are refunded 100%.
+
+**Other app-layer decisions worth noting:**
+- **Minimum-funding threshold**: the builder sets a minimum % of the goal. Below it the covenant can't be locked — backers can **withdraw** their deposit, or the builder can **accept the partial raise** to proceed.
+- **Backers control the judges**: the builder cannot pick their own referees. Backers appoint judges after depositing (see below).
 
 All state changes and distributions are logged with txids + direct explorer links.
 
@@ -182,30 +190,31 @@ Open **http://localhost:3000** — or read the built-in **Docs** page at **http:
 
    Congratulations — you just sent real money on Stacks testnet!
 
-5. **Pool the money into FlowVault (the magic programmable part)**
-   - Scroll to the "CUSTODIAN ACTIONS" section.
-   - Click **POOL INTO FLOWVAULT (LOCK 100%)**.
-   - The app calls `set-routing-rules` + `deposit` using the private key you put in `.env.local`.
-   - A new explorer link appears. Click it.
-   - You will see the funds are now inside the FlowVault contract with a lock.
+5. **Appoint judges (as a backer)**
+   - Only backers who funded can appoint judges — the builder can't pick their own referees.
+   - In the judge panel, add a judge address (or click **Add myself as a judge**). Appoint at least one before locking.
 
-6. **Simulate the judges attesting**
-   - In the Judge panel, click **ATTEST: MET** a couple of times (demo judges).
-   - Status should move toward "Dispute Window".
+6. **Lock the money into FlowVault (the magic programmable part)**
+   - In the **SETTLEMENT** section, click **① LOCK FUNDS IN ESCROW** (enabled once funding ≥ your minimum and judges are appointed).
+   - The app calls `set-routing-rules` + `deposit` using the custodian key in `.env`.
+   - A new explorer link appears — the funds are now locked in FlowVault until the deadline.
 
-7. **Resolve the covenant (release the money)**
-   - Click **RESOLVE SUCCESS — 80% BUILDER / 20% PRO-RATA**.
-   - The custodian will:
-     - Call `withdraw()` on FlowVault (unlocks the money)
-     - Send 80% to the builder address
-     - Send 20% split between all backers (including you)
+7. **Judges attest (wallet-signed)**
+   - Each appointed judge connects their wallet and clicks **ATTEST: MET** — their wallet signs the vote and the server verifies the signature.
+   - Once 2-of-N sign MET, the covenant moves to the dispute window.
+
+8. **Settle the grant**
+   - Click **② DISBURSE GRANT — milestone met** (enabled only after 2-of-N MET). The custodian:
+     - Calls `withdraw()` on FlowVault (unlocks the money),
+     - Disburses the grant: 80% to the builder, 20% returned pro-rata to backers.
+   - (Alternatively **② REFUND BACKERS** if not met, or the **timeout refund** if the deadline passed with no consensus.)
    - Multiple new explorer links will appear.
    - Click them all. You will see real token transfers.
 
 8. **Verify everything**
    - Go back to the project detail — all txs are logged.
    - Click "CHECK BALANCE" on the custodian — the number should have changed.
-   - In your own wallet, you should see the pro-rata reward (or full refund if you chose failure).
+   - In your own wallet, you should see your pro-rata 20% return (or a full refund if the milestone wasn't met).
 
 You have now completed a full conditional treasury cycle using real FlowVault primitives on testnet.
 
@@ -262,18 +271,18 @@ Now go record that demo video — you have everything you need.
 - [ ] Successful testnet tx (requires funded custodian key + real USDCx sends)
 - [x] Explicit use of SDK/contract methods documented
 
-## Vault Types (all live on testnet)
+## Vault Types
 
-Every vault type executes real on-chain USDCx transfers through the shared escrow custodian (`src/lib/escrow.ts`):
+The **Milestone-Gated Grant is the flagship**; the other three are secondary behaviors on the same escrow + FlowVault primitives (`src/lib/escrow.ts`). All execute real on-chain USDCx transfers:
 
-- **Milestone Vault** (primary): pooled funding released only when invited judges sign a 2-of-N attestation, with a dispute window.
+- **Milestone-Gated Grant** (flagship): backers fund a grant into escrow; on a verified milestone it's disbursed 80% to the builder / 20% back to backers, else refunded (including the deadline-timeout case).
 - **Payroll Vault**: each contributor check-in releases a real USDCx payment; a missed check-in claws the remainder back to the payer.
 - **Reputation Vault**: split % auto-computed from each participant's reputation score, then paid pro-rata on-chain.
 - **Insurance Pool**: pooled premiums pay the claimant on a declared incident, or refund/roll on expiry.
 
 ## Judge Attestation (trustless)
 
-**The builder cannot pick the judges** — that would be judging their own work. Judges are **appointed by investors after they deposit** (an investor may appoint themselves); the builder is blocked, and a covenant cannot be pooled/locked until judges are appointed. Each judge connects their wallet and **cryptographically signs** their MET/NOT-MET vote with `@stacks/connect`. The server **verifies the signature** (`@stacks/encryption` `verifyMessageSignatureRsv`) against the judge's address before recording it, and only appointed judges count toward the 2-of-N threshold. A tampered vote fails verification.
+**The builder cannot pick the judges** — that would be judging their own work. Judges are **appointed by backers after they fund** (a backer may appoint themselves); the builder is blocked, and a covenant cannot be pooled/locked until judges are appointed. Each judge connects their wallet and **cryptographically signs** their MET/NOT-MET vote with `@stacks/connect`. The server **verifies the signature** (`@stacks/encryption` `verifyMessageSignatureRsv`) against the judge's address before recording it, and only appointed judges count toward the 2-of-N threshold. A tampered vote fails verification. If the **deadline passes without 2-of-N consensus**, the grant times out and backers are refunded 100%.
 
 ## Tech
 

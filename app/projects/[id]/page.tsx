@@ -12,13 +12,14 @@ import { eqAddr, includesAddr } from "@/src/lib/address";
 import { NextStep, type Role } from "@/src/components/NextStep";
 
 const DETAIL_TOUR: TourStep[] = [
-  { selector: "#tour-timeline", title: "The lifecycle", body: "This timeline tracks the covenant from created → funded → locked → resolved. Each step logs its on-chain transaction." },
-  { selector: "#tour-custodian", title: "Live vault balance", body: "The escrow custodian's real FlowVault balance, read live from the contract. 'Locked' funds can't be withdrawn until the deadline block." },
-  { selector: "#tour-invest", title: "How investors fund it", body: "Investors send USDCx to the custodian address here. Each contribution is tracked with its real transfer transaction." },
-  { selector: "#tour-judgepanel", title: "Independent judges", body: "The judges you invited attest whether the milestone was met. 2-of-N agreement is required — this is what protects investors." },
+  { selector: "#tour-timeline", title: "The lifecycle", body: "Tracks the grant from created → funded → locked → judged → settled. The deadline shows the exact date and time. Each step logs its on-chain transaction." },
+  { selector: "#tour-custodian", title: "Live vault balance", body: "The escrow custodian's real FlowVault balance, read live from the contract. 'Locked' funds can't be withdrawn until the deadline." },
+  { selector: "#tour-invest", title: "How backers fund it", body: "Backers send USDCx to the custodian here — into escrow, not to the builder. Each contribution is tracked with its real transfer transaction." },
+  { selector: "#tour-judgepanel", title: "Independent judges", body: "Backers (not the builder) appoint judges who attest whether the milestone was met. 2-of-N agreement is required — this is what protects backers." },
   { selector: "#tour-lock", title: "① Lock funds in escrow", body: "Once funding hits the minimum and judges are appointed, this locks the raised USDCx in FlowVault until the deadline. Nobody can pull it out early." },
-  { selector: "#tour-release", title: "② Release to builder", body: "Only clickable after 2-of-N judges sign that the milestone was met. Pays 80% to the builder and 20% back to investors — all on-chain." },
-  { selector: "#tour-refund", title: "② Refund investors", body: "The safety path: if the milestone isn't met, this refunds 100% of the pool pro-rata back to investors." },
+  { selector: "#tour-release", title: "② Disburse grant — milestone met", body: "Only clickable after 2-of-N judges sign MET. Disburses the grant: 80% to the builder, 20% returned to backers — all on-chain." },
+  { selector: "#tour-refund", title: "② Refund backers — not met", body: "If the judges say the milestone was not met, this refunds 100% of the pool pro-rata to backers." },
+  { selector: "#tour-timeout", title: "⏱ Timeout refund", body: "The safety rule: if the deadline passes without 2-of-N judges reaching MET, the grant is cancelled and backers are refunded 100%. This only appears once the deadline has passed with no consensus." },
 ];
 import { request, connect, getLocalStorage } from "@stacks/connect";
 import { Cl } from "@stacks/transactions";
@@ -87,7 +88,7 @@ export default function ProjectDetail() {
   const projectId = params.id;
 
   // Judges are invited per-project by the builder (independent verifiers). Funds
-  // release only when 2-of-N attest MET, so investors don't have to trust the builder.
+  // release only when 2-of-N attest MET, so backers don't have to trust the builder.
   const invitedJudges: string[] = (() => {
     try {
       return JSON.parse((project as any)?.judges || "[]");
@@ -105,10 +106,10 @@ export default function ProjectDetail() {
   const metMin = totalRaised >= minRequired || !!project?.builderAcceptedPartial;
 
   const youAreJudge = includesAddr(invitedJudges, connectedAddr);
-  const youAreInvestor = !!connectedAddr && activeContribs.some((c) => eqAddr(c.principal, connectedAddr));
+  const youAreBacker = !!connectedAddr && activeContribs.some((c) => eqAddr(c.principal, connectedAddr));
   const youAreBuilder = eqAddr(connectedAddr, project?.builderAddress);
   const preLock = ["CREATED", "BACKING_OPEN"].includes(project?.status || "");
-  const canAppointJudges = youAreInvestor && preLock;
+  const canAppointJudges = youAreBacker && preLock;
 
   const threshold = Math.min(2, invitedJudges.length || 2);
   const metCount = attestations.filter((a) => a.vote === "MET" && includesAddr(invitedJudges, a.judge)).length;
@@ -116,7 +117,10 @@ export default function ProjectDetail() {
     .filter((c) => eqAddr(c.principal, connectedAddr))
     .reduce((s, c) => s + BigInt(c.amount), BigInt(0))
     .toString();
-  const stepRole: Role = youAreBuilder ? "builder" : "investor";
+  const stepRole: Role = youAreBuilder ? "builder" : "backer";
+  const deadlinePassed = project?.deadlineAt ? new Date(project.deadlineAt).getTime() <= Date.now() : false;
+  const noConsensus = metCount < threshold;
+  const canTimeoutRefund = deadlinePassed && noConsensus && ["BACKING_OPEN", "POOLED_LOCKED", "DISPUTE_WINDOW"].includes(project?.status || "");
 
   async function handleAppointJudges(addresses: string[]) {
     if (!connectedAddr) { toast.error("Connect your wallet."); return; }
@@ -127,7 +131,7 @@ export default function ProjectDetail() {
       const res = await fetch(`/api/projects/${projectId}/judges`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ investor: connectedAddr, judges: clean }),
+        body: JSON.stringify({ backer: connectedAddr, judges: clean }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to appoint judges");
@@ -146,7 +150,7 @@ export default function ProjectDetail() {
     setIsAppointing(true);
     try {
       const res = await fetch(`/api/projects/${projectId}/withdraw-contribution`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ investor: connectedAddr }),
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ backer: connectedAddr }),
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || "Withdrawal failed");
@@ -404,13 +408,13 @@ export default function ProjectDetail() {
     }
   }
 
-  // Resolution trigger (custodian action)
-  async function handleResolve(success: boolean) {
+  // Resolution trigger (custodian action). `timeout` = deadline passed, no consensus.
+  async function handleResolve(success: boolean, timeout = false) {
     try {
       const res = await fetch(`/api/projects/${projectId}/resolve`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ success }),
+        body: JSON.stringify({ success, timeout }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -546,13 +550,13 @@ export default function ProjectDetail() {
                       <div className="text-xs px-2 py-0.5 bg-[var(--surface-container-low)] text-[var(--ink)]">{metCount} MET</div>
                     </div>
                     <p className="text-[11px] text-[var(--on-surface-variant)] mb-4">
-                      Judges are appointed by <strong className="text-[var(--ink)]">investors</strong> (not the builder). Funds only release when <strong className="text-[var(--ink)]">{threshold} of {invitedJudges.length || "N"}</strong> attest MET.
+                      Judges are appointed by <strong className="text-[var(--ink)]">backers</strong> (not the builder). Funds only release when <strong className="text-[var(--ink)]">{threshold} of {invitedJudges.length || "N"}</strong> attest MET.
                     </p>
 
-                    {/* Investors appoint judges (only investors, only before lock) */}
+                    {/* Backers appoint judges (only backers, only before lock) */}
                     {canAppointJudges && (
                       <div className="mb-4 border border-[var(--ink)]/15 rounded-sm p-3 bg-[var(--surface-container-low)]">
-                        <div className="font-label-caps text-[10px] text-[var(--on-surface-variant)] mb-1.5">APPOINT A JUDGE (INVESTORS ONLY)</div>
+                        <div className="font-label-caps text-[10px] text-[var(--on-surface-variant)] mb-1.5">APPOINT A JUDGE (BACKERS ONLY)</div>
                         <div className="flex items-center gap-2">
                           <input
                             value={judgeInput}
@@ -570,9 +574,9 @@ export default function ProjectDetail() {
 
                     {invitedJudges.length === 0 ? (
                       <div className="text-sm text-[var(--on-surface-variant)] border border-dashed border-[var(--ink)]/20 rounded p-4">
-                        {youAreInvestor
+                        {youAreBacker
                           ? "No judges appointed yet — add the judges who will verify this milestone above."
-                          : "No judges appointed yet. After you invest, you can appoint the judges who verify this milestone."}
+                          : "No judges appointed yet. After you fund this grant, you can appoint the judges who verify this milestone."}
                       </div>
                     ) : (
                       <>
@@ -644,7 +648,7 @@ export default function ProjectDetail() {
         {project.status === "CREATED" || project.status === "BACKING_OPEN" ? (
           <div id="tour-invest" className="border border-[var(--ink)]/10 p-6 mb-8 max-w-lg">
             <div className="font-label-caps text-xs mb-2">TRANSACTION SETUP</div>
-            <h3 className="font-headline-md mb-4">Invest in this Covenant</h3>
+            <h3 className="font-headline-md mb-4">Fund this grant</h3>
 
             <div className="mb-4">
               <div className="text-xs font-label-caps mb-1">SEND USDCx TO CUSTODIAN</div>
@@ -666,10 +670,10 @@ export default function ProjectDetail() {
           </div>
         ) : null}
 
-        {/* Investor Ledger */}
+        {/* Backer Ledger */}
         <div className="border border-[var(--ink)]/10 mb-8 overflow-hidden">
           <div className="p-4 bg-white dark:bg-[#121720] border-b border-[var(--ink)]/10 dark:border-white/10">
-            <div className="font-label-caps text-xs">INVESTOR LEDGER • {contributions.length} CONTRIBUTIONS</div>
+            <div className="font-label-caps text-xs">BACKER LEDGER • {contributions.length} CONTRIBUTIONS</div>
           </div>
           <div className="overflow-x-auto bg-white dark:bg-[#121720]">
             <table className="w-full text-left data-table">
@@ -682,7 +686,7 @@ export default function ProjectDetail() {
                 </tr>
               </thead>
               <tbody className="text-sm font-data-sm">
-                {contributions.length === 0 && <tr><td colSpan={4} className="p-8 text-center text-[var(--on-surface-variant)]">No investors yet.</td></tr>}
+                {contributions.length === 0 && <tr><td colSpan={4} className="p-8 text-center text-[var(--on-surface-variant)]">No backers yet.</td></tr>}
                 {contributions.map((c, idx) => (
                   <tr key={idx} className="border-b border-[var(--ink)]/10 hover:bg-[var(--parchment)]">
                     <td className="p-3 font-mono text-xs text-[var(--ink)]">{c.principal}</td>
@@ -698,7 +702,7 @@ export default function ProjectDetail() {
           </div>
         </div>
 
-        {/* Funding status + pre-lock actions (investor withdraw / builder accept-partial) */}
+        {/* Funding status + pre-lock actions (backer withdraw / builder accept-partial) */}
         {preLock && (
           <div className="border border-[var(--ink)]/10 p-6 mb-8 rounded-sm">
             <div className="flex justify-between text-xs font-label-caps text-[var(--on-surface-variant)] mb-1.5">
@@ -710,11 +714,11 @@ export default function ProjectDetail() {
               <div className="absolute top-[-2px] bottom-[-2px] w-[2px] bg-[var(--signet)]" style={{ left: `${Math.min(100, minBps / 100)}%` }} title="Minimum to proceed" />
             </div>
             <p className="text-xs mt-2 text-[var(--on-surface-variant)]">
-              {metMin ? "Minimum reached — ready to lock once judges are appointed." : "Below the builder's minimum. Investors may withdraw, or the builder can accept the partial raise."}
+              {metMin ? "Minimum reached — ready to lock once judges are appointed." : "Below the builder's minimum. Backers may withdraw, or the builder can accept the partial raise."}
             </p>
 
             <div className="flex flex-wrap gap-3 mt-3">
-              {youAreInvestor && (
+              {youAreBacker && (
                 <button onClick={handleWithdraw} disabled={isAppointing} className="btn-secondary text-xs py-2 px-4 disabled:opacity-50">WITHDRAW MY DEPOSIT</button>
               )}
               {youAreBuilder && !metMin && activeContribs.length > 0 && (
@@ -732,9 +736,9 @@ export default function ProjectDetail() {
           {(() => {
             const poolBlockReason =
               activeContribs.length === 0
-                ? "No investors have deposited yet."
+                ? "No backers have funded this yet."
                 : invitedJudges.length === 0
-                ? "Investors must appoint at least one judge first."
+                ? "Backers must appoint at least one judge first."
                 : !metMin
                 ? "Funding is below the minimum (builder can accept the partial raise above)."
                 : "";
@@ -763,17 +767,27 @@ export default function ProjectDetail() {
                     disabled={!canRelease}
                     title={canRelease ? "" : "Requires 2-of-N judges to sign MET first."}
                     onClick={() => handleResolve(true)}
-                    className="btn-primary text-sm py-2 w-full sm:w-auto disabled:opacity-40">② RELEASE TO BUILDER — milestone met</button>
-                  <p className="text-[11px] text-[var(--on-surface-variant)] mt-1">{canRelease ? "Withdraws from FlowVault and pays 80% builder / 20% investors." : `Enabled once ${threshold}-of-${invitedJudges.length || "N"} judges sign MET (currently ${metCount}).`}</p>
+                    className="btn-primary text-sm py-2 w-full sm:w-auto disabled:opacity-40">② DISBURSE GRANT — milestone met</button>
+                  <p className="text-[11px] text-[var(--on-surface-variant)] mt-1">{canRelease ? "Withdraws from FlowVault and disburses the grant: 80% to the builder, 20% returned to backers." : `Enabled once ${threshold}-of-${invitedJudges.length || "N"} judges sign MET (currently ${metCount}).`}</p>
                 </div>
 
                 <div>
                   <button
                     id="tour-refund"
                     onClick={() => handleResolve(false)}
-                    className="btn-secondary text-sm py-2 w-full sm:w-auto">② REFUND INVESTORS — milestone not met</button>
-                  <p className="text-[11px] text-[var(--on-surface-variant)] mt-1">Withdraws from FlowVault and refunds 100% pro-rata to investors.</p>
+                    className="btn-secondary text-sm py-2 w-full sm:w-auto">② REFUND BACKERS — milestone not met</button>
+                  <p className="text-[11px] text-[var(--on-surface-variant)] mt-1">Withdraws from FlowVault and refunds 100% pro-rata to backers.</p>
                 </div>
+
+                {canTimeoutRefund && (
+                  <div>
+                    <button
+                      id="tour-timeout"
+                      onClick={() => handleResolve(false, true)}
+                      className="btn-secondary text-sm py-2 w-full sm:w-auto border-[var(--signet)] text-[var(--signet)]">⏱ REFUND — DEADLINE PASSED, NO CONSENSUS</button>
+                    <p className="text-[11px] text-[var(--on-surface-variant)] mt-1">The deadline passed without {threshold}-of-{invitedJudges.length || "N"} judges reaching MET. Safety rule: the grant is cancelled and backers are refunded 100%.</p>
+                  </div>
+                )}
               </div>
             );
           })()}

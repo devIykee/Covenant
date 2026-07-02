@@ -21,7 +21,7 @@ export default async function ReputationVault() {
         </div>
         <p className="text-sm text-[var(--on-surface-variant)] max-w-2xl">
           Reputation is earned automatically: <strong className="text-[var(--ink)]">+1 for every covenant that resolves successfully</strong> while
-          you were a builder or investor (written on resolution of the live Milestone vault). In a reputation vault, payout
+          you were a builder or backer (written on resolution of the live Milestone vault). In a reputation vault, payout
           splits are computed from these scores. The leaderboard below is <strong className="text-[var(--ink)]">live from the database</strong>.
         </p>
 

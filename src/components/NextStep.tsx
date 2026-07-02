@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { formatUsdcx } from "@/src/lib/units";
 
-export type Role = "investor" | "builder";
+export type Role = "backer" | "builder";
 
 export interface NextStepInput {
   role: Role;
@@ -38,31 +38,31 @@ function guidance(p: NextStepInput): { title: string; detail: string } {
   const mine = Number(p.myContributionMicro || 0);
   const minPct = Math.round(p.minBps / 100);
 
-  if (p.role === "investor") {
+  if (p.role === "backer") {
     if (phase === 0) {
-      if (mine <= 0 || p.myWithdrawn) return { title: "Back this campaign", detail: "Enter an amount and confirm the deposit. Your USDCx goes into escrow, not to the builder." };
-      if (!p.metMin) return { title: "Funding is below the minimum", detail: `Only ${minPct}%+ of the goal unlocks this campaign. You can withdraw your deposit now, or wait — funds stay parked in escrow until the builder decides.` };
-      return { title: "You're in — appoint judges", detail: "Minimum reached. As an investor you can appoint the judges who'll verify the milestone (you can appoint yourself), then the builder locks the funds." };
+      if (mine <= 0 || p.myWithdrawn) return { title: "Fund this grant", detail: "Enter an amount and confirm. Your USDCx goes into escrow, not to the builder — it's only disbursed if the milestone is met." };
+      if (!p.metMin) return { title: "Funding is below the minimum", detail: `Only ${minPct}%+ of the goal unlocks this grant. You can withdraw your contribution now, or wait — funds stay parked in escrow until the builder decides.` };
+      return { title: "You're in — appoint judges", detail: "Minimum reached. As a backer you can appoint the judges who'll verify the milestone (you can appoint yourself), then the builder locks the funds." };
     }
-    if (phase === 1) return { title: "Funds locked in escrow", detail: "Your deposit is locked on-chain in FlowVault until the deadline. Judges will attest whether the milestone was met." };
-    if (phase === 2) return { title: "Judges are attesting", detail: `${p.metCount ?? 0} of ${p.threshold ?? 2} needed have signed MET. If they reach the threshold, funds release; otherwise you're refunded.` };
+    if (phase === 1) return { title: "Funds locked in escrow", detail: "Your contribution is locked on-chain in FlowVault until the deadline. Judges will attest whether the milestone was met." };
+    if (phase === 2) return { title: "Judges are attesting", detail: `${p.metCount ?? 0} of ${p.threshold ?? 2} needed have signed MET. If they reach the threshold the grant is disbursed; if the deadline passes without consensus, you're refunded.` };
     return resolvedOk
-      ? { title: "Milestone met — reward sent", detail: "The covenant resolved successfully. Your pro-rata share of the 20% reward pool was sent to your wallet." }
-      : { title: "Milestone not met — refunded", detail: "The covenant resolved as failed. Your deposit was refunded to your wallet in full." };
+      ? { title: "Milestone met — grant disbursed", detail: "The covenant resolved successfully. The grant went to the builder; your pro-rata 20% share was returned to your wallet." }
+      : { title: "Not met — refunded", detail: "The milestone wasn't met (or the deadline passed without consensus). Your contribution was refunded in full." };
   }
 
   // builder
   if (phase === 0) {
-    if (Number(p.raisedMicro) <= 0) return { title: "Waiting for investors", detail: "Your campaign is live. Share it — investors deposit into escrow, then appoint the judges." };
+    if (Number(p.raisedMicro) <= 0) return { title: "Waiting for backers", detail: "Your campaign is live. Share it — backers fund the grant into escrow, then appoint the judges." };
     if (!p.metMin) return { title: "Below your minimum", detail: `You set a ${minPct}% minimum. Wait for more backers, or accept the partial raise to proceed with what's in escrow.` };
-    if (p.judgeCount === 0) return { title: "Waiting on judges", detail: "You've hit your minimum. Investors need to appoint at least one judge before you can lock the funds." };
+    if (p.judgeCount === 0) return { title: "Waiting on judges", detail: "You've hit your minimum. Backers need to appoint at least one judge before you can lock the funds." };
     return { title: "Ready to lock funds", detail: "Minimum reached and judges appointed. Lock the raised USDCx in escrow to start the milestone period." };
   }
-  if (phase === 1) return { title: "Funds locked", detail: "The raised USDCx is locked in FlowVault until the deadline. Waiting for judges to attest the milestone." };
-  if (phase === 2) return { title: "Judges attesting", detail: `${p.metCount ?? 0} of ${p.threshold ?? 2} needed have signed MET. Once the threshold is met, release the funds (80% to you, 20% to investors).` };
+  if (phase === 1) return { title: "Funds locked", detail: "The grant is locked in FlowVault until the deadline. Waiting for judges to attest the milestone." };
+  if (phase === 2) return { title: "Judges attesting", detail: `${p.metCount ?? 0} of ${p.threshold ?? 2} needed have signed MET. Once the threshold is met, disburse the grant (80% to you, 20% returned to backers). If the deadline passes without consensus, backers are refunded.` };
   return resolvedOk
-    ? { title: "Released — milestone met", detail: "Resolved successfully. 80% went to your treasury, 20% pro-rata to investors." }
-    : { title: "Refunded — milestone not met", detail: "Resolved as failed. 100% of the pool was refunded to investors." };
+    ? { title: "Grant disbursed — milestone met", detail: "Resolved successfully. 80% went to your treasury, 20% pro-rata to backers." }
+    : { title: "Refunded — not met", detail: "The milestone wasn't met (or timed out). 100% of the pool was refunded to backers." };
 }
 
 export function NextStep(props: NextStepInput) {

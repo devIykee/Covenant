@@ -8,7 +8,7 @@ import { formatUsdcx } from "@/src/lib/units";
 import { formatDeadline } from "@/src/lib/format";
 import { NextStep } from "@/src/components/NextStep";
 
-interface Investor { principal: string; amount: string; depositExplorerUrl: string | null }
+interface Backer { principal: string; amount: string; depositExplorerUrl: string | null }
 interface DashProject {
   id: string;
   title: string;
@@ -20,7 +20,7 @@ interface DashProject {
   minRequired: string;
   metMin: boolean;
   judgeCount: number;
-  investors: Investor[];
+  backers: Backer[];
   deadlineAt?: string | null;
   deadlineBlock?: number;
   myContribution?: string;
@@ -42,7 +42,7 @@ function badge(status: string) {
 
 export default function Dashboard() {
   const [addr, setAddr] = useState<string | null>(null);
-  const [data, setData] = useState<{ asBuilder: DashProject[]; asInvestor: DashProject[] }>({ asBuilder: [], asInvestor: [] });
+  const [data, setData] = useState<{ asBuilder: DashProject[]; asBacker: DashProject[] }>({ asBuilder: [], asBacker: [] });
   const [busy, setBusy] = useState<string | null>(null);
 
   const load = useCallback(async (a: string) => {
@@ -87,7 +87,7 @@ export default function Dashboard() {
       const res = await fetch(`/api/projects/${id}/withdraw-contribution`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ investor: addr }),
+        body: JSON.stringify({ backer: addr }),
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || "Failed");
@@ -124,7 +124,7 @@ export default function Dashboard() {
         <Nav />
         <main className="flex-grow max-w-[1000px] mx-auto w-full px-6 py-24 text-center">
           <h1 className="font-display-lg text-3xl mb-3">Your Dashboard</h1>
-          <p className="text-[var(--on-surface-variant)]">Connect your wallet (top-right) to see the campaigns you&rsquo;ve created and the ones you&rsquo;ve invested in.</p>
+          <p className="text-[var(--on-surface-variant)]">Connect your wallet (top-right) to see the campaigns you&rsquo;ve created and the ones you&rsquo;ve backed.</p>
         </main>
       </div>
     );
@@ -141,7 +141,7 @@ export default function Dashboard() {
         {/* As builder */}
         <section className="mb-12">
           <h2 className="font-headline-md text-xl mb-1">Campaigns you created</h2>
-          <p className="text-sm text-[var(--on-surface-variant)] mb-5">Track funding, see who invested, and manage settlement.</p>
+          <p className="text-sm text-[var(--on-surface-variant)] mb-5">Track funding, see who backed it, and manage settlement.</p>
           {data.asBuilder.length === 0 ? (
             <div className="border border-dashed border-[var(--ink)]/20 rounded-sm p-8 text-center text-sm text-[var(--on-surface-variant)]">
               You haven&rsquo;t created any campaigns. <Link href="/projects/create" className="underline text-[var(--ink)]">Create one</Link>.
@@ -162,12 +162,12 @@ export default function Dashboard() {
                   </div>
 
                   <div className="mt-4 border-t border-[var(--ink)]/10 pt-3">
-                    <div className="font-label-caps text-[10px] text-[var(--on-surface-variant)] mb-2">INVESTORS ({p.investors.length})</div>
-                    {p.investors.length === 0 ? (
+                    <div className="font-label-caps text-[10px] text-[var(--on-surface-variant)] mb-2">BACKERS ({p.backers.length})</div>
+                    {p.backers.length === 0 ? (
                       <div className="text-xs text-[var(--on-surface-variant)]">No deposits yet.</div>
                     ) : (
                       <div className="space-y-1">
-                        {p.investors.map((inv, i) => (
+                        {p.backers.map((inv, i) => (
                           <div key={i} className="flex justify-between text-xs font-data-sm">
                             <span>{inv.principal.slice(0, 12)}…{inv.principal.slice(-4)}</span>
                             <span className="flex items-center gap-2">
@@ -180,7 +180,7 @@ export default function Dashboard() {
                     )}
                   </div>
 
-                  {preLock(p.status) && !p.metMin && p.investors.length > 0 && (
+                  {preLock(p.status) && !p.metMin && p.backers.length > 0 && (
                     <div className="mt-4 flex items-center justify-between gap-3 flex-wrap border border-[var(--signet)]/30 bg-[var(--signet)]/5 rounded-sm p-3">
                       <span className="text-xs text-[var(--on-surface-variant)]">Under your minimum. You can proceed with what&rsquo;s raised, or wait for more.</span>
                       <button onClick={() => acceptPartial(p.id)} disabled={busy === p.id} className="btn-primary text-[11px] px-3 py-1.5 disabled:opacity-50">
@@ -194,17 +194,17 @@ export default function Dashboard() {
           )}
         </section>
 
-        {/* As investor */}
+        {/* As backer */}
         <section>
-          <h2 className="font-headline-md text-xl mb-1">Campaigns you invested in</h2>
+          <h2 className="font-headline-md text-xl mb-1">Campaigns you backed</h2>
           <p className="text-sm text-[var(--on-surface-variant)] mb-5">Your deposits and what&rsquo;s happening with each.</p>
-          {data.asInvestor.length === 0 ? (
+          {data.asBacker.length === 0 ? (
             <div className="border border-dashed border-[var(--ink)]/20 rounded-sm p-8 text-center text-sm text-[var(--on-surface-variant)]">
-              You haven&rsquo;t invested yet. <Link href="/projects" className="underline text-[var(--ink)]">Browse campaigns</Link>.
+              You haven&rsquo;t backed anything yet. <Link href="/projects" className="underline text-[var(--ink)]">Browse campaigns</Link>.
             </div>
           ) : (
             <div className="space-y-5">
-              {data.asInvestor.map((p) => (
+              {data.asBacker.map((p) => (
                 <div key={p.id} className="card-container p-6">
                   <div className="flex justify-between items-start gap-3 mb-3">
                     <Link href={`/projects/${p.id}`} className="font-semibold hover:underline">{p.title}</Link>
@@ -223,7 +223,7 @@ export default function Dashboard() {
                     )}
                   </div>
                   <div className="mt-4">
-                    <NextStep role="investor" id={p.id} status={p.status} raisedMicro={p.raised} goalMicro={p.fundingGoal} minBps={p.minFundingBps} metMin={p.metMin} judgeCount={p.judgeCount} myContributionMicro={p.myContribution} myWithdrawn={p.myWithdrawn} />
+                    <NextStep role="backer" id={p.id} status={p.status} raisedMicro={p.raised} goalMicro={p.fundingGoal} minBps={p.minFundingBps} metMin={p.metMin} judgeCount={p.judgeCount} myContributionMicro={p.myContribution} myWithdrawn={p.myWithdrawn} />
                   </div>
                 </div>
               ))}

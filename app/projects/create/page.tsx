@@ -9,15 +9,15 @@ import { toMicro } from "@/src/lib/units";
 import { GuidedTour, type TourStep } from "@/src/components/GuidedTour";
 
 const CREATE_TOUR: TourStep[] = [
-  { selector: "#tour-title", title: "Name your covenant", body: "A clear title investors will recognize — e.g. \"Q3 Protocol Development\"." },
+  { selector: "#tour-title", title: "Name your covenant", body: "A clear title backers will recognize — e.g. \"Q3 Protocol Development\"." },
   { selector: "#tour-milestone", title: "Describe the deliverable", body: "This is the promise funds are gated on. Be specific about what will be delivered." },
   { selector: "#tour-details", title: "Acceptance criteria", body: "Spell out exactly what the judges will check before releasing funds." },
-  { selector: "#tour-goal", title: "Funding goal", body: "How much USDCx you aim to raise. Investors send this token to the escrow custodian." },
-  { selector: "#tour-deadline", title: "Deadline", body: "Pick a calendar date. We convert it to a Stacks block height for the on-chain time-lock." },
-  { selector: "#tour-min", title: "Minimum to proceed", body: "The least you'll accept. Raise below it and investors can withdraw — or you can accept the partial amount. 100% = all-or-nothing." },
-  { selector: "#tour-builder", title: "Builder address (optional)", body: "The builder's Stacks address. Leave blank to use your connected wallet." },
-  { selector: "#tour-treasury", title: "Treasury address", body: "Where the 80% builder payout is sent if the milestone succeeds." },
-  { selector: "#tour-submit", title: "Publish the campaign", body: "Creates the campaign and lists it on the site. Investors deposit into escrow and then appoint the judges — you don't pick your own referees." },
+  { selector: "#tour-goal", title: "Funding goal", body: "How much USDCx you aim to raise. Backers send this token to the escrow custodian." },
+  { selector: "#tour-deadline", title: "Deadline (date & time)", body: "Pick the exact date AND time. We convert the full timestamp to a Stacks block height for the on-chain time-lock — and if judges don't reach consensus by then, backers are auto-refunded." },
+  { selector: "#tour-min", title: "Minimum to proceed", body: "The least you'll accept. Raise below it and backers can withdraw — or you can accept the partial amount. 100% = all-or-nothing." },
+  { selector: "#tour-builder", title: "Builder address (your wallet)", body: "Defaults to your connected wallet so the campaign shows on your dashboard. Only change it to build on behalf of another address." },
+  { selector: "#tour-treasury", title: "Treasury address", body: "Where the 80% grant is disbursed if the milestone succeeds." },
+  { selector: "#tour-submit", title: "Publish the campaign", body: "Creates the campaign and lists it on the site. Backers deposit into escrow and then appoint the judges — you don't pick your own referees." },
 ];
 
 export default function CreateProject() {
@@ -232,7 +232,7 @@ export default function CreateProject() {
                 <div className="absolute right-4 top-3 text-sm text-[var(--on-surface-variant)]">%</div>
               </div>
               <p className="mt-1.5 text-xs text-[var(--on-surface-variant)] max-w-lg">
-                If less than this is raised, investors can withdraw their deposits — or you can accept the partial amount and proceed. 100% means all-or-nothing.
+                If less than this is raised, backers can withdraw their deposits — or you can accept the partial amount and proceed. 100% means all-or-nothing.
               </p>
             </div>
 
@@ -263,7 +263,7 @@ export default function CreateProject() {
 
           <div className="rounded-sm border border-[var(--ink)]/15 bg-[var(--surface-container-low)] p-4 text-sm text-[var(--on-surface-variant)]">
             <span className="font-label-caps text-[10px] text-[var(--ink)]">HOW JUDGING WORKS</span>
-            <p className="mt-1">You don&rsquo;t pick the judges — that would let you approve your own work. After investors deposit into escrow, <strong className="text-[var(--ink)]">they</strong> appoint the judges who verify your milestone. Funds release only when the appointed judges attest.</p>
+            <p className="mt-1">You don&rsquo;t pick the judges — that would let you approve your own work. After backers deposit into escrow, <strong className="text-[var(--ink)]">they</strong> appoint the judges who verify your milestone. Funds release only when the appointed judges attest.</p>
           </div>
 
           <div className="pt-6 border-t border-[var(--ink)]/20 flex flex-col items-center text-center">

@@ -129,24 +129,25 @@ export default function DocsPage() {
               </p>
               <p>Covenant solves this at the application layer with an escrow custodian:</p>
               <div className="card-container p-5 space-y-3">
-                <Step n={1} title="Investors send USDCx to a known custodian address">
+                <Step n={1} title="Backers send USDCx to a known custodian address">
                   A backend-controlled testnet account. Each contribution is tracked in our database against
-                  the investor&rsquo;s wallet and the project.
+                  the backer&rsquo;s wallet and the project.
                 </Step>
                 <Step n={2} title="The custodian pools funds into its own FlowVault vault">
                   It calls <code className="font-data-sm">set-routing-rules</code> + <code className="font-data-sm">deposit</code>,
                   locking 100% until the deadline block. This is the real on-chain programmable behavior.
                 </Step>
-                <Step n={3} title="Investors appoint judges, who attest (2-of-N multisig)">
+                <Step n={3} title="Backers appoint judges, who attest (2-of-N multisig)">
                   The builder <strong className="text-[var(--ink)]">cannot pick the judges</strong> — that would be judging their own work.
-                  After investors deposit, <strong className="text-[var(--ink)]">they</strong> appoint the judges (an investor may appoint themselves).
+                  After backers deposit, <strong className="text-[var(--ink)]">they</strong> appoint the judges (an backer may appoint themselves).
                   Each judge connects their wallet and <strong className="text-[var(--ink)]">cryptographically signs</strong> their &ldquo;met&rdquo; / &ldquo;not met&rdquo;
                   vote; the server verifies the signature against their address. Once 2-of-N sign MET, a dispute window opens before funds move.
                 </Step>
-                <Step n={4} title="The custodian withdraws and distributes">
+                <Step n={4} title="The custodian withdraws and settles the grant">
                   After the lock passes, it calls <code className="font-data-sm">withdraw</code> and sends tracked
-                  SIP-010 transfers: on success 80% to the builder + 20% pro-rata to investors; on failure, 100%
-                  refunded pro-rata.
+                  SIP-010 transfers. On success the <strong className="text-[var(--ink)]">grant is disbursed</strong>: 80% to
+                  the builder, 20% returned pro-rata to backers. On failure (or if the deadline passes with no 2-of-N
+                  consensus — the <strong className="text-[var(--ink)]">timeout</strong> case), backers are refunded 100%.
                 </Step>
               </div>
               <p>
@@ -240,20 +241,23 @@ STACKS_PRIVATE_KEY   (your funded custodian key)`}</Code>
                 a milestone description, a funding goal, and a deadline. Submit.
               </Step>
               <Step n={3} title="Back it with USDCx (your first on-chain tx)">
-                On the project page, enter an amount in &ldquo;Invest in this Covenant&rdquo; and confirm. Your wallet signs a
+                On the project page, enter an amount in &ldquo;Fund this grant&rdquo; and confirm. Your wallet signs a
                 transfer to the custodian. An explorer link appears — that&rsquo;s a real testnet transaction.
               </Step>
-              <Step n={4} title="Pool into FlowVault">
-                Click <strong className="text-[var(--ink)]">Pool into FlowVault</strong>. The custodian runs{" "}
-                <code className="font-data-sm">set-routing-rules</code> + <code className="font-data-sm">deposit</code>, locking 100%.
+              <Step n={4} title="Appoint judges, then lock funds">
+                As a backer, appoint the judges (you can appoint yourself). Then click{" "}
+                <strong className="text-[var(--ink)]">① Lock Funds in Escrow</strong> — the custodian runs{" "}
+                <code className="font-data-sm">set-routing-rules</code> + <code className="font-data-sm">deposit</code>, locking the grant until the deadline.
               </Step>
               <Step n={5} title="Judges attest, dispute window opens">
                 Copy the <strong className="text-[var(--ink)]">judge invite link</strong> from the judge panel and send it to your judges.
                 Each connects their wallet and signs a vote. Once 2-of-N sign &ldquo;MET,&rdquo; the covenant moves to the dispute window.
               </Step>
-              <Step n={6} title="Resolve">
-                Choose <strong className="text-[var(--ink)]">Resolve Success</strong> (80/20) or <strong className="text-[var(--ink)]">Resolve Failure</strong>{" "}
-                (full refund). The custodian withdraws and distributes. Every transfer is logged with an explorer link.
+              <Step n={6} title="Settle">
+                Use <strong className="text-[var(--ink)]">Disburse Grant</strong> (80% builder / 20% back to backers, enabled
+                only after 2-of-N sign MET), <strong className="text-[var(--ink)]">Refund Backers</strong> (milestone not met), or —
+                if the deadline passes with no consensus — the <strong className="text-[var(--ink)]">timeout refund</strong>. Every
+                transfer is logged with an explorer link.
               </Step>
               <p className="text-sm pt-2">
                 That&rsquo;s a complete conditional-treasury cycle on real testnet infrastructure — exactly what a demo video should show.
@@ -263,8 +267,8 @@ STACKS_PRIVATE_KEY   (your funded custodian key)`}</Code>
 
           {/* 6. Vault types */}
           <section id="vaulttypes" className="scroll-mt-24">
-            <h2 className="font-headline-md text-2xl mb-3">6. The four vault types (all live on testnet)</h2>
-            <p className="text-sm text-[var(--on-surface-variant)] mb-4">Every type executes real on-chain USDCx transfers through the shared escrow custodian.</p>
+            <h2 className="font-headline-md text-2xl mb-3">6. The vault types</h2>
+            <p className="text-sm text-[var(--on-surface-variant)] mb-4">The <strong className="text-[var(--ink)]">Milestone-Gated Grant</strong> is the flagship — a grant that&rsquo;s only disbursed to the builder when independent judges verify the milestone. The other three are secondary behaviors built on the same escrow + FlowVault primitives. All execute real on-chain USDCx transfers.</p>
             <div className="grid sm:grid-cols-2 gap-4">
               <Link href="/projects" className="card-container p-5 block hover:opacity-80 transition-opacity">
                 <div className="font-label-caps text-xs text-[var(--on-surface-variant)]">MILESTONE · LIVE</div>
