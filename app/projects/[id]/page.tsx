@@ -70,6 +70,8 @@ export default function ProjectDetail() {
   const [connectedAddr, setConnectedAddr] = useState<string | null>(null);
   const [actingJudge, setActingJudge] = useState<string>("");
   const [isAttesting, setIsAttesting] = useState(false);
+  const [pageUrl, setPageUrl] = useState("");
+  const [linkCopied, setLinkCopied] = useState(false);
 
   const projectId = params.id;
 
@@ -84,11 +86,20 @@ export default function ProjectDetail() {
   })();
   const youAreJudge = !!connectedAddr && invitedJudges.includes(connectedAddr);
 
-  // Pick up the connected wallet.
+  // Pick up the connected wallet + this page's shareable URL (the judge invite link).
   useEffect(() => {
     if (typeof window === "undefined") return;
     setConnectedAddr(localStorage.getItem("covenant-address"));
+    setPageUrl(window.location.href);
   }, []);
+
+  function copyInviteLink() {
+    const url = pageUrl || (typeof window !== "undefined" ? window.location.href : "");
+    navigator.clipboard?.writeText(url);
+    setLinkCopied(true);
+    toast.success("Invite link copied — send it to your judges");
+    setTimeout(() => setLinkCopied(false), 1500);
+  }
 
   // Default the "attest as" selection: your own address if you're a judge, else the first judge.
   useEffect(() => {
@@ -459,20 +470,26 @@ export default function ProjectDetail() {
                           })}
                         </div>
 
-                        {youAreJudge ? (
-                          <div className="mb-3 text-[11px] text-[var(--brass)]">You are an invited judge — cast your vote below.</div>
-                        ) : (
-                          <div className="mb-3 flex items-center justify-between gap-2 flex-wrap">
-                            <span className="text-[11px] text-[var(--on-surface-variant)]">You&rsquo;re not an invited judge. Share this page so a judge can attest:</span>
-                            <button
-                              type="button"
-                              onClick={() => { navigator.clipboard?.writeText(typeof window !== "undefined" ? window.location.href : ""); toast.success("Invite link copied"); }}
-                              className="btn-secondary text-[10px] px-2 py-1"
-                            >
-                              COPY INVITE LINK
+                        {/* Judge invite link — always visible so the builder can share it */}
+                        <div className="mb-4 border border-[var(--ink)]/15 rounded-sm p-3 bg-[var(--surface-container-low)]">
+                          <div className="font-label-caps text-[10px] text-[var(--on-surface-variant)] mb-1.5">JUDGE INVITE LINK — SEND THIS TO YOUR JUDGES</div>
+                          <div className="flex items-center gap-2">
+                            <input
+                              readOnly
+                              value={pageUrl}
+                              onFocus={(e) => e.currentTarget.select()}
+                              className="flex-1 min-w-0 bg-transparent border border-[var(--ink)]/15 rounded px-2 py-1.5 text-xs font-data-sm text-[var(--ink)]"
+                            />
+                            <button type="button" onClick={copyInviteLink} className="btn-primary text-[10px] px-3 py-1.5 shrink-0">
+                              {linkCopied ? "COPIED" : "COPY"}
                             </button>
                           </div>
-                        )}
+                          <p className="text-[10px] text-[var(--on-surface-variant)] mt-2">
+                            An invited judge opens this link, connects their wallet, and attests. {youAreJudge
+                              ? "You're an invited judge — cast your vote below."
+                              : "Your connected wallet isn't on the judge list."}
+                          </p>
+                        </div>
 
                         <label className="block font-label-caps text-[10px] text-[var(--on-surface-variant)] mb-1">ATTEST AS</label>
                         <select

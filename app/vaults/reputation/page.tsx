@@ -1,13 +1,15 @@
 import { Nav } from "@/src/components/Nav";
 import Link from "next/link";
 import { db } from "@/src/lib/db";
+import { ReputationManager } from "@/src/components/ReputationManager";
 
 export const dynamic = "force-dynamic";
 
 export default async function ReputationVault() {
   const leaders = await db.reputation
-    .findMany({ orderBy: { score: "desc" }, take: 20 })
+    .findMany({ orderBy: { score: "desc" }, take: 50 })
     .catch(() => [] as { principal: string; score: number }[]);
+  const scores: Record<string, number> = Object.fromEntries(leaders.map((r) => [r.principal, r.score]));
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -15,7 +17,7 @@ export default async function ReputationVault() {
       <main className="flex-grow max-w-[1200px] mx-auto w-full px-6 py-12">
         <div className="flex items-center gap-3 mb-2">
           <h1 className="font-display-lg text-3xl">Reputation-Weighted Vault</h1>
-          <span className="text-[10px] font-label-caps px-2 py-0.5 rounded bg-[var(--brass)]/20 text-[var(--brass)]">PREVIEW</span>
+          <span className="text-[10px] font-label-caps px-2 py-0.5 rounded bg-[#2f7d5b]/20 text-[#2f7d5b]">LIVE</span>
         </div>
         <p className="text-sm text-[var(--on-surface-variant)] max-w-2xl">
           Reputation is earned automatically: <strong className="text-[var(--ink)]">+1 for every covenant that resolves successfully</strong> while
@@ -53,10 +55,11 @@ export default async function ReputationVault() {
           )}
         </div>
 
-        <div className="mt-8 max-w-2xl text-sm text-[var(--on-surface-variant)] border border-dashed border-[var(--ink)]/20 rounded-sm p-5">
-          <div className="font-label-caps text-xs text-[var(--ink)] mb-1">CREATING A REPUTATION VAULT — PREVIEW</div>
-          Reputation-weighted vault creation isn&rsquo;t wired to testnet yet. The <Link href="/projects" className="underline text-[var(--ink)] hover:no-underline">Milestone vault</Link> is
-          the fully live feature — resolving those is what mints the reputation shown above.
+        <ReputationManager scores={scores} />
+
+        <div className="mt-10 text-xs text-[var(--on-surface-variant)] max-w-2xl">
+          Splits are computed automatically from the reputation above and paid out with real SIP-010 transfers from the
+          escrow custodian. Reputation is minted by resolving <Link href="/projects" className="underline text-[var(--ink)] hover:no-underline">Milestone covenants</Link>.
         </div>
       </main>
     </div>

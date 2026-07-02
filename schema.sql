@@ -110,10 +110,12 @@ CREATE TABLE "ReputationVault" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "title" TEXT NOT NULL,
     "totalAmount" TEXT NOT NULL,
-    "lockUntilBlock" INTEGER NOT NULL,
+    "lockUntilBlock" INTEGER NOT NULL DEFAULT 0,
     "status" TEXT NOT NULL DEFAULT 'OPEN',
     "pooledTxid" TEXT,
     "resolvedTxid" TEXT,
+    "resolvedExplorerUrl" TEXT,
+    "payouts" TEXT NOT NULL DEFAULT '[]',
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -131,12 +133,14 @@ CREATE TABLE "ReputationVaultParticipant" (
 CREATE TABLE "InsurancePool" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "title" TEXT NOT NULL,
-    "triggerCondition" TEXT NOT NULL,
-    "lockUntilBlock" INTEGER NOT NULL,
+    "triggerCondition" TEXT NOT NULL DEFAULT 'INCIDENT_DECLARED',
+    "lockUntilBlock" INTEGER NOT NULL DEFAULT 0,
     "returnOnExpiry" TEXT NOT NULL DEFAULT 'REFUND',
     "status" TEXT NOT NULL DEFAULT 'OPEN',
     "pooledTxid" TEXT,
     "resolvedTxid" TEXT,
+    "resolvedExplorerUrl" TEXT,
+    "payouts" TEXT NOT NULL DEFAULT '[]',
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -146,6 +150,7 @@ CREATE TABLE "InsuranceContribution" (
     "poolId" TEXT NOT NULL,
     "principal" TEXT NOT NULL,
     "amount" TEXT NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "InsuranceContribution_poolId_fkey" FOREIGN KEY ("poolId") REFERENCES "InsurancePool" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 

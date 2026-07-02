@@ -89,6 +89,11 @@ const MIGRATIONS = [
   `ALTER TABLE "PayrollVault" ADD COLUMN "clawbackExplorerUrl" TEXT`,
   `ALTER TABLE "CheckIn" ADD COLUMN "amount" TEXT`,
   `ALTER TABLE "CheckIn" ADD COLUMN "explorerUrl" TEXT`,
+  `ALTER TABLE "ReputationVault" ADD COLUMN "resolvedExplorerUrl" TEXT`,
+  `ALTER TABLE "ReputationVault" ADD COLUMN "payouts" TEXT NOT NULL DEFAULT '[]'`,
+  `ALTER TABLE "InsurancePool" ADD COLUMN "resolvedExplorerUrl" TEXT`,
+  `ALTER TABLE "InsurancePool" ADD COLUMN "payouts" TEXT NOT NULL DEFAULT '[]'`,
+  `ALTER TABLE "InsuranceContribution" ADD COLUMN "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP`,
 ];
 
 async function runMigrations() {

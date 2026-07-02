@@ -8,9 +8,9 @@ export default function SecondaryVaults() {
       <main className="max-w-[1200px] mx-auto w-full px-6 py-12">
         <h1 className="font-display-lg text-3xl mb-2">Secondary Vaults</h1>
         <p className="text-[var(--on-surface-variant)] max-w-xl">
-          Additional programmable-money behaviors built on the same escrow + FlowVault primitives as the live
-          Milestone vault. These three are <strong className="text-[var(--ink)]">previews</strong> — the fully on-chain
-          feature today is the <Link href="/projects" className="underline text-[var(--ink)] hover:no-underline">Milestone-Gated Vault</Link>.
+          Additional programmable-money behaviors built on the same escrow + FlowVault primitives as the{" "}
+          <Link href="/projects" className="underline text-[var(--ink)] hover:no-underline">Milestone vault</Link>. All
+          three execute <strong className="text-[var(--ink)]">real on-chain USDCx transfers</strong> from the escrow custodian.
         </p>
 
         <div className="mt-10 grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -29,22 +29,22 @@ export default function SecondaryVaults() {
           <div className="card-container p-6">
             <div className="flex items-center justify-between">
               <div className="font-label-caps text-xs text-[var(--on-surface-variant)]">REPUTATION VAULT</div>
-              <span className="text-[9px] font-label-caps px-1.5 py-0.5 rounded bg-[var(--brass)]/20 text-[var(--brass)]">LIVE LEADERBOARD</span>
+              <span className="text-[9px] font-label-caps px-1.5 py-0.5 rounded bg-[#2f7d5b]/20 text-[#2f7d5b]">LIVE</span>
             </div>
             <div className="text-xl font-semibold mt-1 mb-2">Reputation-Weighted Split</div>
             <p className="text-sm text-[var(--on-surface-variant)]">Splits computed automatically from historical success reputation. Higher reputation = larger share of resolution payout.</p>
-            <Link href="/vaults/reputation" className="mt-4 block btn-secondary text-xs py-2 w-full text-center">VIEW REPUTATION LEADERBOARD</Link>
+            <Link href="/vaults/reputation" className="mt-4 block btn-primary text-xs py-2 w-full text-center">OPEN REPUTATION VAULT</Link>
           </div>
 
           {/* Insurance */}
           <div className="card-container p-6">
             <div className="flex items-center justify-between">
               <div className="font-label-caps text-xs text-[var(--on-surface-variant)]">INSURANCE VAULT</div>
-              <span className="text-[9px] font-label-caps px-1.5 py-0.5 rounded bg-[var(--brass)]/20 text-[var(--brass)]">PREVIEW</span>
+              <span className="text-[9px] font-label-caps px-1.5 py-0.5 rounded bg-[#2f7d5b]/20 text-[#2f7d5b]">LIVE</span>
             </div>
             <div className="text-xl font-semibold mt-1 mb-2">Parametric Insurance Pool</div>
-            <p className="text-sm text-[var(--on-surface-variant)]">Pooled premiums. Trigger = judge multisig incident declaration. Payouts or refund at expiry.</p>
-            <Link href="/vaults/insurance" className="mt-4 block btn-secondary text-xs py-2 w-full text-center">VIEW INSURANCE POOL</Link>
+            <p className="text-sm text-[var(--on-surface-variant)]">Pooled premiums. Incident declaration pays the claimant on-chain; refund or roll at expiry.</p>
+            <Link href="/vaults/insurance" className="mt-4 block btn-primary text-xs py-2 w-full text-center">OPEN INSURANCE POOL</Link>
           </div>
         </div>
 

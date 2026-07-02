@@ -128,10 +128,12 @@ model ReputationVault {
   id                String @id @default(cuid())
   title             String
   totalAmount       String
-  lockUntilBlock    Int
-  status            String @default("OPEN")
+  lockUntilBlock    Int      @default(0)
+  status            String @default("OPEN") // OPEN | DISTRIBUTED
   pooledTxid        String?
   resolvedTxid      String?
+  resolvedExplorerUrl String?
+  payouts           String   @default("[]") // JSON [{recipient, amount, txid, explorerUrl}]
   createdAt         DateTime @default(now())
   participants      ReputationVaultParticipant[]
 }
@@ -149,12 +151,14 @@ model ReputationVaultParticipant {
 model InsurancePool {
   id               String  @id @default(cuid())
   title            String
-  triggerCondition String  // e.g. "INCIDENT_DECLARED"
-  lockUntilBlock   Int
+  triggerCondition String  @default("INCIDENT_DECLARED")
+  lockUntilBlock   Int      @default(0)
   returnOnExpiry   String  @default("REFUND") // REFUND | ROLL
-  status           String  @default("OPEN")
+  status           String  @default("OPEN") // OPEN | PAID_OUT | REFUNDED | ROLLED
   pooledTxid       String?
   resolvedTxid     String?
+  resolvedExplorerUrl String?
+  payouts          String   @default("[]") // JSON [{recipient, amount, txid, explorerUrl}]
   createdAt        DateTime @default(now())
 
   contributions    InsuranceContribution[]
@@ -165,6 +169,7 @@ model InsuranceContribution {
   poolId        String
   principal     String
   amount        String
+  createdAt     DateTime @default(now())
   pool          InsurancePool @relation(fields: [poolId], references: [id])
 }
 
