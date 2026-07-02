@@ -167,7 +167,7 @@ export default function CovenantHome() {
             <div className="border border-[var(--ink)]/10 p-6 rounded-sm">
               <div className="font-label-caps text-xs mb-1 text-[var(--on-surface-variant)]">PAYROLL VAULT</div>
               <div className="font-semibold mb-1">Streaming Payroll with Clawback</div>
-              <p className="text-[var(--on-surface-variant)] text-sm">Time-locked streaming releases with activity check-ins. Missed check-in triggers clawback to payer.</p>
+              <p className="text-[var(--on-surface-variant)] text-sm">Time-locked streaming releases with activity check-ins. Missed check-in triggers clawback to investor.</p>
             </div>
             <div className="border border-[var(--ink)]/10 p-6 rounded-sm">
               <div className="font-label-caps text-xs mb-1 text-[var(--on-surface-variant)]">REPUTATION VAULT</div>

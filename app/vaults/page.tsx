@@ -14,7 +14,7 @@ export default function SecondaryVaults() {
           <div className="card-container p-6">
             <div className="font-label-caps text-xs text-[var(--on-surface-variant)]">PAYROLL VAULT</div>
             <div className="text-xl font-semibold mt-1 mb-2">Streaming Payroll + Clawback</div>
-            <p className="text-sm text-[var(--on-surface-variant)]">Payer funds a locked vault. Releases stream at fixed intervals. Contributor must check-in each period or remaining funds clawback.</p>
+            <p className="text-sm text-[var(--on-surface-variant)]">Investor funds a locked vault. Releases stream at fixed intervals. Contributor must check-in each period or remaining funds clawback.</p>
             <Link href="/vaults/payroll" className="mt-4 block btn-secondary text-xs py-2 w-full text-center">OPEN PAYROLL VAULT</Link>
           </div>
 

@@ -72,7 +72,7 @@ export default async function ProjectsList() {
                           <div className="font-data-sm text-[var(--ink)]">{deadlineLabel}</div>
                         </div>
                         <div className="text-right">
-                          <div className="text-[var(--on-surface-variant)]">BACKERS</div>
+                          <div className="text-[var(--on-surface-variant)]">INVESTORS</div>
                           <div className="font-data-sm text-[var(--ink)]">{p.contributions.length}</div>
                         </div>
                       </div>

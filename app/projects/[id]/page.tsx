@@ -428,7 +428,7 @@ export default function ProjectDetail() {
         {project.status === "CREATED" || project.status === "BACKING_OPEN" ? (
           <div className="border border-[var(--ink)]/10 p-6 mb-8 max-w-lg">
             <div className="font-label-caps text-xs mb-2">TRANSACTION SETUP</div>
-            <h3 className="font-headline-md mb-4">Back this Covenant</h3>
+            <h3 className="font-headline-md mb-4">Invest in this Covenant</h3>
 
             <div className="mb-4">
               <div className="text-xs font-label-caps mb-1">SEND USDCx TO CUSTODIAN</div>
@@ -450,10 +450,10 @@ export default function ProjectDetail() {
           </div>
         ) : null}
 
-        {/* Backer Ledger */}
+        {/* Investor Ledger */}
         <div className="border border-[var(--ink)]/10 mb-8 overflow-hidden">
           <div className="p-4 bg-white dark:bg-[#121720] border-b border-[var(--ink)]/10 dark:border-white/10">
-            <div className="font-label-caps text-xs">BACKER LEDGER • {contributions.length} CONTRIBUTIONS</div>
+            <div className="font-label-caps text-xs">INVESTOR LEDGER • {contributions.length} CONTRIBUTIONS</div>
           </div>
           <div className="overflow-x-auto bg-white dark:bg-[#121720]">
             <table className="w-full text-left data-table">
@@ -466,7 +466,7 @@ export default function ProjectDetail() {
                 </tr>
               </thead>
               <tbody className="text-sm font-data-sm">
-                {contributions.length === 0 && <tr><td colSpan={4} className="p-8 text-center text-[var(--on-surface-variant)]">No backers yet.</td></tr>}
+                {contributions.length === 0 && <tr><td colSpan={4} className="p-8 text-center text-[var(--on-surface-variant)]">No investors yet.</td></tr>}
                 {contributions.map((c, idx) => (
                   <tr key={idx} className="border-b border-[var(--ink)]/10 hover:bg-[var(--parchment)]">
                     <td className="p-3 font-mono text-xs text-[var(--ink)]">{c.principal}</td>

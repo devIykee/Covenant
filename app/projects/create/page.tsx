@@ -5,6 +5,18 @@ import { Nav } from "@/src/components/Nav";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { getCurrentBlockHeight } from "@/src/lib/flowvault";
+import { GuidedTour, type TourStep } from "@/src/components/GuidedTour";
+
+const CREATE_TOUR: TourStep[] = [
+  { selector: "#tour-title", title: "Name your covenant", body: "A clear title investors will recognize — e.g. \"Q3 Protocol Development\"." },
+  { selector: "#tour-milestone", title: "Describe the deliverable", body: "This is the promise funds are gated on. Be specific about what will be delivered." },
+  { selector: "#tour-details", title: "Acceptance criteria", body: "Spell out exactly what the judges will check before releasing funds." },
+  { selector: "#tour-goal", title: "Funding goal", body: "How much USDCx you aim to raise. Investors send this token to the escrow custodian." },
+  { selector: "#tour-deadline", title: "Deadline", body: "Pick a calendar date. We convert it to a Stacks block height for the on-chain time-lock." },
+  { selector: "#tour-builder", title: "Builder address (optional)", body: "The builder's Stacks address. Leave blank to use your connected wallet." },
+  { selector: "#tour-treasury", title: "Treasury address", body: "Where the 80% builder payout is sent if the milestone succeeds." },
+  { selector: "#tour-submit", title: "Initialize the covenant", body: "Creates the on-ledger record. Next you'll share the custodian address for investors to fund it." },
+];
 
 export default function CreateProject() {
   const router = useRouter();
@@ -90,9 +102,12 @@ export default function CreateProject() {
 
       <main className="flex-grow w-full max-w-3xl mx-auto px-6 md:px-12 py-12">
         <div className="mb-12">
-          <h1 className="font-display-lg-mobile md:font-display-lg text-3xl md:text-[32px] mb-2">Initialize Agreement</h1>
+          <div className="flex items-start justify-between gap-4">
+            <h1 className="font-display-lg-mobile md:font-display-lg text-3xl md:text-[32px] mb-2">Initialize Agreement</h1>
+          </div>
           <p className="text-[var(--on-surface-variant)] font-body-lg border-b border-[var(--ink)]/20 pb-6">
             Draft a new notarized covenant. Ensure all terms are precisely defined before execution.
+            <span className="block mt-2 text-sm">First time? A short guided tour will point out what each field does — no need to read the docs.</span>
           </p>
         </div>
 
@@ -109,6 +124,7 @@ export default function CreateProject() {
               <div>
                 <label className="block font-label-caps text-xs text-[var(--on-surface-variant)] mb-2">COVENANT TITLE</label>
                 <input
+                  id="tour-title"
                   value={form.title}
                   onChange={(e) => setForm({ ...form, title: e.target.value })}
                   className="input-line w-full px-4 py-3 font-data-lg text-lg placeholder:text-[var(--on-surface-variant)]/50"
@@ -119,6 +135,7 @@ export default function CreateProject() {
               <div>
                 <label className="block font-label-caps text-xs text-[var(--on-surface-variant)] mb-2">MILESTONE DESCRIPTION</label>
                 <textarea
+                  id="tour-milestone"
                   value={form.description}
                   onChange={(e) => setForm({ ...form, description: e.target.value })}
                   className="input-line w-full px-4 py-3 font-body-md placeholder:text-[var(--on-surface-variant)]/50 resize-y min-h-[96px]"
@@ -129,6 +146,7 @@ export default function CreateProject() {
               <div>
                 <label className="block font-label-caps text-xs text-[var(--on-surface-variant)] mb-2">MILESTONE DETAILS</label>
                 <textarea
+                  id="tour-details"
                   value={form.milestoneDescription}
                   onChange={(e) => setForm({ ...form, milestoneDescription: e.target.value })}
                   className="input-line w-full px-4 py-3 font-body-md placeholder:text-[var(--on-surface-variant)]/50 resize-y"
@@ -153,6 +171,7 @@ export default function CreateProject() {
                 <label className="block font-label-caps text-xs text-[var(--on-surface-variant)] mb-2">FUNDING GOAL (USDCx)</label>
                 <div className="relative">
                   <input
+                    id="tour-goal"
                     type="number"
                     step="0.01"
                     value={form.fundingGoal}
@@ -168,6 +187,7 @@ export default function CreateProject() {
               <div>
                 <label className="block font-label-caps text-xs text-[var(--on-surface-variant)] mb-2">EXECUTION DEADLINE</label>
                 <input
+                  id="tour-deadline"
                   type="date"
                   value={form.deadlineDate}
                   onChange={handleDateChange}
@@ -184,6 +204,7 @@ export default function CreateProject() {
               <div>
                 <label className="block font-label-caps text-xs text-[var(--on-surface-variant)] mb-2">BUILDER PRINCIPAL (OPTIONAL)</label>
                 <input
+                  id="tour-builder"
                   value={form.builderAddress}
                   onChange={(e) => setForm({ ...form, builderAddress: e.target.value })}
                   className="input-line w-full px-4 py-3 font-data-sm"
@@ -193,6 +214,7 @@ export default function CreateProject() {
               <div>
                 <label className="block font-label-caps text-xs text-[var(--on-surface-variant)] mb-2">TREASURY ADDRESS</label>
                 <input
+                  id="tour-treasury"
                   value={form.treasuryAddress}
                   onChange={(e) => setForm({ ...form, treasuryAddress: e.target.value })}
                   className="input-line w-full px-4 py-3 font-data-sm"
@@ -207,13 +229,15 @@ export default function CreateProject() {
               By initializing this covenant, you agree to secure the stated funds in escrow until the defined milestones are cryptographically verified.
             </p>
 
-            <button type="submit" disabled={loading} className="btn-primary w-full md:w-auto px-12 disabled:opacity-50">
+            <button id="tour-submit" type="submit" disabled={loading} className="btn-primary w-full md:w-auto px-12 disabled:opacity-50">
               {loading ? "INITIALIZING ON LEDGER..." : "INITIALIZE COVENANT"}
             </button>
             <button type="button" onClick={() => router.back()} className="mt-4 text-xs text-[var(--on-surface-variant)] underline">CANCEL DRAFT</button>
           </div>
         </form>
       </main>
+
+      <GuidedTour steps={CREATE_TOUR} storageKey="covenant-create-tour-v1" />
     </div>
   );
 }

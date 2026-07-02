@@ -129,9 +129,9 @@ export default function DocsPage() {
               </p>
               <p>Covenant solves this at the application layer with an escrow custodian:</p>
               <div className="card-container p-5 space-y-3">
-                <Step n={1} title="Backers send USDCx to a known custodian address">
+                <Step n={1} title="Investors send USDCx to a known custodian address">
                   A backend-controlled testnet account. Each contribution is tracked in our database against
-                  the backer&rsquo;s wallet and the project.
+                  the investor&rsquo;s wallet and the project.
                 </Step>
                 <Step n={2} title="The custodian pools funds into its own FlowVault vault">
                   It calls <code className="font-data-sm">set-routing-rules</code> + <code className="font-data-sm">deposit</code>,
@@ -139,11 +139,11 @@ export default function DocsPage() {
                 </Step>
                 <Step n={3} title="Judges attest the outcome (2-of-3 multisig)">
                   Trusted addresses sign &ldquo;met&rdquo; or &ldquo;not met.&rdquo; A dispute window follows so
-                  backers can challenge before funds move.
+                  investors can challenge before funds move.
                 </Step>
                 <Step n={4} title="The custodian withdraws and distributes">
                   After the lock passes, it calls <code className="font-data-sm">withdraw</code> and sends tracked
-                  SIP-010 transfers: on success 80% to the builder + 20% pro-rata to backers; on failure, 100%
+                  SIP-010 transfers: on success 80% to the builder + 20% pro-rata to investors; on failure, 100%
                   refunded pro-rata.
                 </Step>
               </div>
@@ -238,7 +238,7 @@ STACKS_PRIVATE_KEY   (your funded custodian key)`}</Code>
                 a milestone description, a funding goal, and a deadline. Submit.
               </Step>
               <Step n={3} title="Back it with USDCx (your first on-chain tx)">
-                On the project page, enter an amount in &ldquo;Back this Covenant&rdquo; and confirm. Your wallet signs a
+                On the project page, enter an amount in &ldquo;Invest in this Covenant&rdquo; and confirm. Your wallet signs a
                 transfer to the custodian. An explorer link appears — that&rsquo;s a real testnet transaction.
               </Step>
               <Step n={4} title="Pool into FlowVault">
@@ -270,7 +270,7 @@ STACKS_PRIVATE_KEY   (your funded custodian key)`}</Code>
               <Link href="/vaults/payroll" className="card-container p-5 block hover:opacity-80 transition-opacity">
                 <div className="font-label-caps text-xs text-[var(--on-surface-variant)]">PAYROLL</div>
                 <div className="font-semibold mt-1">Streaming Payroll + Clawback</div>
-                <p className="text-sm text-[var(--on-surface-variant)] mt-1">Budget streams at intervals; a missed check-in claws the remainder back to the payer.</p>
+                <p className="text-sm text-[var(--on-surface-variant)] mt-1">Budget streams at intervals; a missed check-in claws the remainder back to the investor.</p>
               </Link>
               <Link href="/vaults/reputation" className="card-container p-5 block hover:opacity-80 transition-opacity">
                 <div className="font-label-caps text-xs text-[var(--on-surface-variant)]">REPUTATION</div>
