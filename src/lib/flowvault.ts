@@ -103,6 +103,27 @@ export function getExplorerTxUrl(txid: string): string {
   return `${EXPLORER_BASE}/txid/${clean}?chain=${FLOWVAULT_NETWORK}`;
 }
 
+// Explorer link for a principal. Standard wallet addresses use /address/;
+// contract principals (they contain a ".") use Hiro's /txid/ contract view.
+export function getExplorerAddressUrl(addr: string): string {
+  const clean = (addr || "").trim();
+  const path = clean.includes(".") ? "txid" : "address";
+  return `${EXPLORER_BASE}/${path}/${clean}?chain=${FLOWVAULT_NETWORK}`;
+}
+
+// Unified: detect whether `value` is a 64-hex txid or a principal/contract, and
+// return the correct explorer URL.
+export function getExplorerUrl(value: string): string {
+  const v = (value || "").trim();
+  if (/^(0x)?[0-9a-fA-F]{64}$/.test(v)) return getExplorerTxUrl(v);
+  return getExplorerAddressUrl(v);
+}
+
+// The FlowVault contract's own explorer URL (for "funds are held in this contract").
+export function getFlowVaultContractUrl(): string {
+  return getExplorerAddressUrl(`${FLOWVAULT_CONTRACT_ADDRESS}.${FLOWVAULT_CONTRACT_NAME}`);
+}
+
 // Safe amount helpers (string/bigint only, no float)
 export function toMicro(amount: string | bigint): string {
   // Assume caller passes whole units? For USDCx assume 6 decimals.

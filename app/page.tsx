@@ -33,22 +33,38 @@ export default async function CovenantHome() {
 
       <main className="flex-grow w-full max-w-[1200px] mx-auto px-6 py-12 md:py-24">
         {/* Hero */}
-        <header className="mb-16 md:mb-24 text-center max-w-3xl mx-auto">
+        <header className="mb-14 md:mb-20 text-center max-w-3xl mx-auto">
+          <div className="font-label-caps text-xs tracking-[0.12em] text-[var(--brass)] mb-4">MILESTONE-GATED GRANTS · ON STACKS + FLOWVAULT</div>
           <h1 className="font-display-lg-mobile md:font-display-lg text-[32px] md:text-[48px] leading-[40px] md:leading-[56px] tracking-[-0.02em] text-[var(--ink)] mb-6">
-            Programmable Trust.
+            Grants that only pay out when the work is verified.
           </h1>
           <p className="font-body-lg text-lg md:text-[18px] leading-[28px] text-[var(--on-surface-variant)]">
-            Immutable ledgers and mathematically verified agreements. Secure your assets with institutional-grade smart contracts, formalized on-chain.
+            Backers fund a grant into escrow. It&rsquo;s time-locked in FlowVault and only <strong className="text-[var(--ink)]">disbursed to the builder</strong> once independent judges (chosen by backers, not the builder) verify the milestone — otherwise everyone is <strong className="text-[var(--ink)]">refunded</strong>. Conditional money routing, not a deposit form.
           </p>
           <div id="tour-home-cta" className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/projects" className="btn-primary">
-              BROWSE COVENANTS
+              BROWSE GRANTS
             </Link>
             <Link href="/projects/create" className="btn-secondary">
-              CREATE COVENANT
+              CREATE A GRANT
             </Link>
           </div>
         </header>
+
+        {/* How it works — makes the conditional-routing logic visible before any deposit UI */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-16 max-w-4xl mx-auto">
+          {[
+            { n: "01", t: "Fund into escrow", d: "Backers deposit USDCx to the covenant. Funds are held by the escrow custodian, not the builder." },
+            { n: "02", t: "Judges verify (2-of-N)", d: "Backers appoint independent judges who cryptographically sign whether the milestone was met." },
+            { n: "03", t: "Route by outcome", d: "Met → 80% grant to builder / 20% back to backers. Not met or timed out → 100% refund." },
+          ].map((s) => (
+            <div key={s.n} className="border border-[var(--ink)]/10 rounded-sm p-5">
+              <div className="font-data-lg text-[var(--brass)] text-sm mb-2">{s.n}</div>
+              <div className="font-semibold mb-1">{s.t}</div>
+              <p className="text-sm text-[var(--on-surface-variant)]">{s.d}</p>
+            </div>
+          ))}
+        </div>
 
         <div className="w-full h-px border-t border-[var(--ink)]/20 mb-16" />
 

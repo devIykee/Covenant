@@ -16,12 +16,26 @@ Funds only move when real-world conditions are verifiably met.
 
 **Core Truth (per official docs)**: FlowVault provides one contract (`flowvault-v2`) with **principal-scoped routing rules**.
 
-Functions used (from `src/lib/flowvault.ts` + `src/lib/escrow.ts`):
-- `set-routing-rules(lockAmount, lockUntilBlock, splitAddress, splitAmount)`
-- `deposit(amount)`
-- `withdraw(amount)` — only unlocked, always to the caller
-- `get-vault-state(principal)` / `get-routing-rules(principal)`
-- `clear-routing-rules()`
+SDK methods used (via the `flowvault-sdk` `FlowVault` client — see `src/lib/flowvault.ts:createBackendVault` and the calls in `src/lib/escrow.ts`):
+
+| SDK method | Where | Contract fn |
+|---|---|---|
+| `setRoutingRules(...)` | `src/lib/escrow.ts:58` | `set-routing-rules` |
+| `deposit(amount)` | `src/lib/escrow.ts:69` | `deposit` |
+| `withdraw(amount)` | `src/lib/escrow.ts:91` | `withdraw` |
+| `getVaultState(principal)` | `src/lib/escrow.ts:105` | `get-vault-state` (read) |
+| `getRoutingRules(principal)` | `src/lib/escrow.ts:111` | `get-routing-rules` (read) |
+| `clearRoutingRules()` | `src/lib/escrow.ts:116` | `clear-routing-rules` |
+
+### Hold / Split / Lock — how the bounty primitives map to real calls
+
+The bounty lists "Lock Vault Flow / Split Vault Flow / Hold Vault Flow." **These are not separate contracts** — FlowVault ships one `flowvault-v2` contract with principal-scoped routing rules. Covenant implements all three as *behavior* on that single contract:
+
+- **Hold behavior** — funds sit in the custodian's vault as unlocked balance (plain `deposit` with no lock), withdrawable at settlement.
+- **Lock behavior** — `setRoutingRules(lockAmount, lockUntilBlock, …)` + `deposit` time-locks the pooled grant on-chain until the deadline block; `withdraw` can only pull unlocked balance, always back to the caller.
+- **Split behavior** — the routing rule's `splitAddress`/`splitAmount` route part of a deposit to another principal automatically; Covenant also performs the conditional 80/20 grant split at settlement via tracked SIP-010 transfers (the underlying contract can't branch on a future event — see below).
+
+This is orchestrated by the **escrow-custodian pattern** because the primitive is *principal-scoped, not project-scoped* — a single custodian principal holds one vault per covenant lifecycle. The same `src/lib/flowvault.ts` + `src/lib/escrow.ts` wrapper is **reused across all four vault types** (Milestone, Payroll, Reputation, Insurance) — the composability / reusable-integration signal the bounty explicitly rewards.
 
 ### Why the Escrow Custodian Pattern
 
@@ -48,6 +62,26 @@ All state changes and distributions are logged with txids + direct explorer link
 - All features import from these shared modules.
 
 This satisfies bounty emphasis on "depth of use of FlowVault's programmable primitives" and "composability".
+
+## ✅ Live testnet transaction (auditable)
+
+A real, executed FlowVault `set-routing-rules` + `deposit` on Stacks testnet, produced by the app's **Lock Funds in Escrow** action and **surfaced in the running app** (the covenant timeline links straight to the explorer):
+
+- **Tx:** [`d31b9c00…d990d141`](https://explorer.hiro.so/txid/d31b9c0039700accf2158990090207cd78619c1977654aa2193cda9ad990d141?chain=testnet)
+- Contract: `STD7QG84VQQ0C35SZM2EYTHZV4M8FQ0R7YNSQWPD.flowvault-v2` · fn `deposit`
+- Custodian: `ST27FAPQP4FMKYFRHB1Q0AMT82TNKDF23YA9QKW24`
+
+Open the [live app](https://thecovenant.vercel.app) → the pooled covenant → the timeline / settlement panel shows the clickable "Lock tx ↗" link. Every subsequent settlement transfer is logged the same way.
+
+## How Covenant maps to the judging criteria
+
+**Innovation & Design (35%).** Covenant is *prediction-market treasury routing*: "will this builder ship?" — resolved by a 2-of-N wallet-signed multisig attestation, not by the fund-receiver. Novel financial behavior stacked on top: **grant framing** (milestone grants, not investments), an **investor-controlled judge** model (the builder can't pick their own referees), a **minimum-funding threshold** with backer-withdraw / builder-accept-partial, a **dispute window**, and a **deadline-timeout auto-refund** safety fallback. None of this is a plain deposit form.
+
+**FlowVault Integration (30%).** Real `flowvault-sdk` calls for lock/deposit/withdraw + read-only `getVaultState`/`getRoutingRules` (table above), grounded honestly in the single-contract reality (Hold/Split/Lock mapping above). One shared wrapper (`flowvault.ts` / `escrow.ts`) reused across all four vault types — composability + reusable integrations.
+
+**Technical Execution (20%).** Typed FlowVault error mapping (`mapFlowVaultError`), all amounts handled as **bigint/micro-unit strings, never floats** (single `src/lib/units.ts` source of truth), `getVaultState` polling for read-after-write consistency, case-normalized address comparisons (`src/lib/address.ts`), a full wallet-linked **dashboard**, guided step-by-step UX, and server-side signature verification of every attestation.
+
+**Ecosystem Value (15%).** The **escrow-custodian pattern** is a reusable recipe for *any* conditional-treasury behavior on FlowVault where the outcome depends on a future event — demonstrated across Milestone, Payroll, Reputation, and Insurance vaults from one shared module, so it's clearly a pattern, not a one-off. Other Stacks builders can lift `flowvault.ts` / `escrow.ts` directly.
 
 ## Contracts & Deployment
 
@@ -264,12 +298,12 @@ Now go record that demo video — you have everything you need.
 
 ## Deliverables Checklist
 
-- [x] Public repo (after push)
-- [x] Working demo (local + deployable)
-- [ ] Demo video (record after real testnet run)
-- [x] README FlowVault explanation (this file)
-- [ ] Successful testnet tx (requires funded custodian key + real USDCx sends)
-- [x] Explicit use of SDK/contract methods documented
+- [x] **Public GitHub repo** — https://github.com/devIykee/Covenant
+- [x] **Working demo** — https://thecovenant.vercel.app (live, primary Milestone Vault flow usable end-to-end)
+- [ ] **Demo video** — ⚠️ **TOP-PRIORITY REMAINING GAP.** Record a 2–3 min walkthrough leading with the Milestone Grant flow (create → back → appoint judges → lock → attest → disburse), showing the explorer links. Everything else is done; this is the one blocker.
+- [x] **FlowVault integration explanation** — the "FlowVault Integration" section above (Hold/Split/Lock mapping + escrow-custodian rationale)
+- [x] **Successful testnet tx** — real `flowvault-v2 deposit` [`d31b9c00…`](https://explorer.hiro.so/txid/d31b9c0039700accf2158990090207cd78619c1977654aa2193cda9ad990d141?chain=testnet), surfaced + clickable in the live app
+- [x] **Use of FlowVault SDK/contracts** — `flowvault-sdk` `FlowVault` client; methods + file paths documented in the table above
 
 ## Vault Types
 

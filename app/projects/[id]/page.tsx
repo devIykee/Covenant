@@ -7,9 +7,10 @@ import { GuidedTour, type TourStep } from "@/src/components/GuidedTour";
 import { toast } from "sonner";
 import Link from "next/link";
 import { formatUsdcx, toMicro, fromMicro } from "@/src/lib/units";
-import { formatDeadline } from "@/src/lib/format";
+import { formatDeadline, formatDateTime } from "@/src/lib/format";
 import { eqAddr, includesAddr } from "@/src/lib/address";
 import { NextStep, type Role } from "@/src/components/NextStep";
+import { ExplorerLink } from "@/src/components/ExplorerLink";
 
 const DETAIL_TOUR: TourStep[] = [
   { selector: "#tour-timeline", title: "The lifecycle", body: "Tracks the grant from created → funded → locked → judged → settled. The deadline shows the exact date and time. Each step logs its on-chain transaction." },
@@ -23,11 +24,13 @@ const DETAIL_TOUR: TourStep[] = [
 ];
 import { request, connect, getLocalStorage } from "@stacks/connect";
 import { Cl } from "@stacks/transactions";
-import { 
-  FLOWVAULT_TOKEN_CONTRACT_ADDRESS, 
-  FLOWVAULT_TOKEN_CONTRACT_NAME, 
+import {
+  FLOWVAULT_TOKEN_CONTRACT_ADDRESS,
+  FLOWVAULT_TOKEN_CONTRACT_NAME,
+  FLOWVAULT_CONTRACT_ADDRESS,
+  FLOWVAULT_CONTRACT_NAME,
   FLOWVAULT_NETWORK,
-  getExplorerTxUrl 
+  getExplorerTxUrl
 } from "@/src/lib/flowvault";
 
 interface Project {
@@ -74,8 +77,6 @@ export default function ProjectDetail() {
   const [isBacking, setIsBacking] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const [custodianBalance, setCustodianBalance] = useState<string | null>(null);
-  const [isCheckingBalance, setIsCheckingBalance] = useState(false);
   const [copiedCustodian, setCopiedCustodian] = useState(false);
 
   const [connectedAddr, setConnectedAddr] = useState<string | null>(null);
@@ -118,6 +119,29 @@ export default function ProjectDetail() {
     .reduce((s, c) => s + BigInt(c.amount), BigInt(0))
     .toString();
   const stepRole: Role = youAreBuilder ? "builder" : "backer";
+
+  // Live on-chain escrow state (custodian's FlowVault vault, principal-scoped).
+  const lockedMicro = Number(vaultState?.lockedBalance ?? 0);
+  const unlockedMicro = Number(vaultState?.unlockedBalance ?? 0);
+  const totalOnChain = Number(vaultState?.totalBalance ?? lockedMicro + unlockedMicro);
+  const lockUntilBlock = Number(vaultState?.lockUntilBlock ?? 0);
+  const currentBlock = Number(vaultState?.currentBlock ?? 0);
+  const isLockedOnChain = lockedMicro > 0 && lockUntilBlock > currentBlock;
+  const blocksLeft = Math.max(0, lockUntilBlock - currentBlock);
+  const estUnlockDate = blocksLeft > 0 ? new Date(Date.now() + (blocksLeft / 144) * 3600 * 1000) : null;
+  const isPooled = ["POOLED_LOCKED", "DISPUTE_WINDOW"].includes(project?.status || "");
+  // Drift: what the app expects pooled vs what's actually in the vault right now.
+  const expectedPooledMicro = isPooled ? Number(totalRaised) : null;
+  const hasDrift = expectedPooledMicro != null && vaultState != null && totalOnChain !== expectedPooledMicro;
+
+  useEffect(() => {
+    if (hasDrift) {
+      // eslint-disable-next-line no-console
+      console.warn(`[escrow drift] covenant ${projectId}: DB expects ${expectedPooledMicro} micro pooled, on-chain vault holds ${totalOnChain} micro (locked ${lockedMicro}, unlocked ${unlockedMicro}).`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasDrift, totalOnChain, expectedPooledMicro]);
+
   const deadlinePassed = project?.deadlineAt ? new Date(project.deadlineAt).getTime() <= Date.now() : false;
   const noConsensus = metCount < threshold;
   const canTimeoutRefund = deadlinePassed && noConsensus && ["BACKING_OPEN", "POOLED_LOCKED", "DISPUTE_WINDOW"].includes(project?.status || "");
@@ -215,28 +239,6 @@ export default function ProjectDetail() {
     setCopiedCustodian(true);
     setTimeout(() => setCopiedCustodian(false), 1600);
   };
-
-  async function checkCustodianBalance() {
-    if (!custodianAddress) return;
-    setIsCheckingBalance(true);
-    try {
-      const res = await fetch(`https://api.testnet.hiro.so/extended/v1/address/${custodianAddress}/balances`);
-      const data = await res.json();
-      // Find USDCx fungible token balance
-      const tokenKey = `${process.env.NEXT_PUBLIC_FLOWVAULT_TOKEN_CONTRACT_ADDRESS || 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM'}.${process.env.NEXT_PUBLIC_FLOWVAULT_TOKEN_CONTRACT_NAME || 'usdcx'}::usdcx`;
-      const ftEntry = data.fungible_tokens?.[tokenKey] || 
-                      Object.values(data.fungible_tokens || {}).find((f: any) => 
-                        (f as any).symbol?.toLowerCase().includes('usdc') || 
-                        (f as any).name?.toLowerCase().includes('usdc')
-                      );
-      const raw = ftEntry ? (ftEntry as any).balance : '0';
-      setCustodianBalance(fromMicro(raw).toFixed(2));
-    } catch (e) {
-      setCustodianBalance('0.00');
-    } finally {
-      setIsCheckingBalance(false);
-    }
-  }
 
   async function pollVaultState() {
     try {
@@ -430,8 +432,6 @@ export default function ProjectDetail() {
     return <div className="min-h-screen flex items-center justify-center">Loading covenant...</div>;
   }
 
-  const raisedDisplay = formatUsdcx(totalRaised.toString());
-  const goalDisplay = formatUsdcx(goal.toString());
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -442,7 +442,7 @@ export default function ProjectDetail() {
           <div>
             <div className="text-xs font-label-caps text-[var(--on-surface-variant)]">AGREEMENT ID: {project.id.slice(0, 12).toUpperCase()}</div>
             <h1 className="font-display-lg text-3xl md:text-[32px] tracking-tight">{project.title}</h1>
-            <p className="text-[var(--on-surface-variant)] mt-1">Builder: <span className="font-data-sm text-[var(--ink)]">{project.builderAddress.slice(0, 8)}...</span></p>
+            <p className="text-[var(--on-surface-variant)] mt-1 flex items-center gap-1">Builder: <ExplorerLink value={project.builderAddress} kind="address" /></p>
           </div>
           <div>
             <span className={
@@ -487,10 +487,10 @@ export default function ProjectDetail() {
                     <div className="font-data-sm text-xs text-[var(--on-surface-variant)]">
                       {idx === 1 && (project.deadlineAt || project.deadlineBlock)
                         ? `Deadline ${formatDeadline(project.deadlineAt, project.deadlineBlock)}`
-                        : idx === 2 && project.pooledExplorerUrl
-                        ? <a href={project.pooledExplorerUrl} target="_blank" className="explorer-link underline">Lock tx ↗</a>
-                        : idx === 4 && project.withdrawExplorerUrl
-                        ? <a href={project.withdrawExplorerUrl} target="_blank" className="explorer-link underline">Settlement tx ↗</a>
+                        : idx === 2 && project.pooledTxid
+                        ? <>Lock tx: <ExplorerLink value={project.pooledTxid} kind="tx" /></>
+                        : idx === 4 && project.withdrawTxid
+                        ? <>Settlement tx: <ExplorerLink value={project.withdrawTxid} kind="tx" /></>
                         : "—"}
                     </div>
                   </div>
@@ -501,41 +501,49 @@ export default function ProjectDetail() {
 
           {/* Vault + Judges */}
           <div className="md:col-span-8 flex flex-col gap-6">
-            <div id="tour-custodian" className="border border-[var(--ink)]/10 p-6 bg-white dark:bg-[#121720] dark:border-white/10 flex flex-col md:flex-row gap-4">
-              <div className="flex-1">
-                <div className="font-label-caps text-xs text-[var(--on-surface-variant)]">LIVE VAULT BALANCE (CUSTODIAN)</div>
-                <div className="text-3xl font-data-lg mt-1 tracking-tight">
-                  {vaultState?.unlocked ? formatUsdcx(vaultState.unlocked) : raisedDisplay} USDCx
-                </div>
-                <div className="text-xs text-[var(--on-surface-variant)] mt-1">Locked: {vaultState?.locked ? formatUsdcx(vaultState.locked) : "—"}</div>
+            {/* Escrow status — live on-chain vault state */}
+            <div id="tour-custodian" className="border border-[var(--ink)]/10 p-6 bg-white dark:bg-[#121720] dark:border-white/10">
+              <div className="flex items-center justify-between mb-3">
+                <div className="font-label-caps text-xs text-[var(--on-surface-variant)]">ESCROW STATUS · LIVE ON-CHAIN</div>
+                {vaultState ? (
+                  isLockedOnChain
+                    ? <span className="text-[10px] font-label-caps px-2 py-0.5 rounded bg-[var(--ink)]/15 text-[var(--ink)]">🔒 LOCKED</span>
+                    : <span className="text-[10px] font-label-caps px-2 py-0.5 rounded bg-[#2f7d5b]/20 text-[#2f7d5b]">AVAILABLE</span>
+                ) : <span className="text-[10px] text-[var(--on-surface-variant)]">reading…</span>}
               </div>
-              <div className="min-w-[260px]">
-                <div className="font-label-caps text-xs text-[var(--on-surface-variant)] flex items-center gap-2">
-                  CUSTODIAN ADDRESS
-                  <button 
-                    onClick={copyCustodian} 
-                    className="text-[10px] px-1.5 py-px rounded border border-[var(--ink)]/20 hover:bg-[var(--ink)]/5 flex items-center gap-1"
-                    title="Copy address"
-                  >
-                    {copiedCustodian ? 'COPIED!' : 'COPY'}
-                  </button>
-                </div>
-                <div className="font-data-sm bg-[var(--surface-container-low)] dark:bg-[#1a202e] px-2 py-1 text-[var(--ink)] dark:text-[#e8ebf5] inline-block mt-1 break-all text-[11px]">
-                  {custodianAddress}
-                  <a href={`https://explorer.hiro.so/address/${custodianAddress}?chain=testnet`} target="_blank" className="ml-2 inline text-[var(--on-surface-variant)] hover:text-[var(--ink)]">↗</a>
-                </div>
 
-                <div className="mt-2 flex items-center gap-2">
-                  <button 
-                    onClick={checkCustodianBalance} 
-                    disabled={isCheckingBalance}
-                    className="text-[10px] px-2 py-1 border border-[var(--ink)]/20 rounded hover:bg-[var(--ink)]/5 disabled:opacity-60"
-                  >
-                    {isCheckingBalance ? 'CHECKING...' : 'CHECK BALANCE'}
-                  </button>
-                  {custodianBalance !== null && (
-                    <span className="font-data-sm text-xs text-[var(--brass)]">{custodianBalance} USDCx</span>
-                  )}
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <div className="text-3xl font-data-lg tracking-tight">
+                    {isLockedOnChain ? formatUsdcx(lockedMicro) : formatUsdcx(0)} <span className="text-base">USDCx</span>
+                  </div>
+                  <p className="text-xs text-[var(--on-surface-variant)] mt-1">
+                    🔒 Locked{isLockedOnChain && lockUntilBlock ? <> until block <span className="text-[var(--ink)]">{lockUntilBlock.toLocaleString()}</span>{estUnlockDate ? <> (~{formatDateTime(estUnlockDate)})</> : null}</> : " — nothing locked right now"}
+                  </p>
+                </div>
+                <div>
+                  <div className="text-3xl font-data-lg tracking-tight">{formatUsdcx(unlockedMicro)} <span className="text-base">USDCx</span></div>
+                  <p className="text-xs text-[var(--on-surface-variant)] mt-1">Available to withdraw{unlockedMicro > 0 ? " now" : " yet"}</p>
+                </div>
+              </div>
+
+              {hasDrift && (
+                <p className="mt-3 text-[11px] text-[var(--signet)]">
+                  ⚠ On-chain vault holds {formatUsdcx(totalOnChain)} USDCx, but this covenant expects {formatUsdcx(expectedPooledMicro || 0)} USDCx pooled. (The custodian vault is shared across covenants, so this can differ; logged for debugging.)
+                </p>
+              )}
+
+              <div className="mt-4 border-t border-[var(--ink)]/10 pt-3 grid sm:grid-cols-2 gap-3 text-xs">
+                <div>
+                  <div className="font-label-caps text-[10px] text-[var(--on-surface-variant)] mb-1 flex items-center gap-2">
+                    ESCROW CUSTODIAN
+                    <button onClick={copyCustodian} className="text-[9px] px-1.5 py-px rounded border border-[var(--ink)]/20 hover:bg-[var(--ink)]/5" title="Copy address">{copiedCustodian ? 'COPIED!' : 'COPY'}</button>
+                  </div>
+                  {custodianAddress ? <ExplorerLink value={custodianAddress} kind="address" /> : <span className="text-[var(--on-surface-variant)]">—</span>}
+                </div>
+                <div>
+                  <div className="font-label-caps text-[10px] text-[var(--on-surface-variant)] mb-1">FLOWVAULT CONTRACT</div>
+                  <ExplorerLink value={`${FLOWVAULT_CONTRACT_ADDRESS}.${FLOWVAULT_CONTRACT_NAME}`} kind="contract" label={`${FLOWVAULT_CONTRACT_NAME}`} />
                 </div>
               </div>
             </div>
@@ -588,7 +596,7 @@ export default function ProjectDetail() {
                               <div key={i} className="flex justify-between py-2 rule-line-minor items-center text-xs gap-2">
                                 <span className="flex items-center gap-2 min-w-0">
                                   <span className="font-label-caps text-[10px] text-[var(--on-surface-variant)] shrink-0">JUDGE {i + 1}</span>
-                                  <span className="font-data-sm truncate">{j.slice(0, 10)}…{j.slice(-4)}</span>
+                                  <ExplorerLink value={j} kind="address" />
                                   {isYou && <span className="text-[9px] px-1.5 py-0.5 rounded bg-[var(--brass)]/20 text-[var(--brass)] font-bold shrink-0">YOU</span>}
                                 </span>
                                 <span className={att ? (att.vote === "MET" ? "text-[var(--brass)] font-medium shrink-0" : "text-[var(--signet)] font-medium shrink-0") : "text-[var(--on-surface-variant)] shrink-0"}>
@@ -652,7 +660,10 @@ export default function ProjectDetail() {
 
             <div className="mb-4">
               <div className="text-xs font-label-caps mb-1">SEND USDCx TO CUSTODIAN</div>
-              <div className="font-data-sm break-all bg-[var(--surface-container-low)] p-2 text-sm">{custodianAddress}</div>
+              <div className="font-data-sm break-all bg-[var(--surface-container-low)] p-2 text-sm flex items-center justify-between gap-2">
+                <span className="break-all">{custodianAddress}</span>
+                {custodianAddress && <ExplorerLink value={custodianAddress} kind="address" label="explorer" className="shrink-0" />}
+              </div>
             </div>
 
             <label className="text-xs font-label-caps block mb-1">CONTRIBUTION AMOUNT (USDCx)</label>
@@ -689,7 +700,7 @@ export default function ProjectDetail() {
                 {contributions.length === 0 && <tr><td colSpan={4} className="p-8 text-center text-[var(--on-surface-variant)]">No backers yet.</td></tr>}
                 {contributions.map((c, idx) => (
                   <tr key={idx} className="border-b border-[var(--ink)]/10 hover:bg-[var(--parchment)]">
-                    <td className="p-3 font-mono text-xs text-[var(--ink)]">{c.principal}</td>
+                    <td className="p-3 text-xs"><ExplorerLink value={c.principal} kind="address" /></td>
                     <td className="p-3 text-right">{formatUsdcx(c.amount)}{c.status === "WITHDRAWN" && <span className="text-[var(--signet)] text-[10px] ml-1">(withdrawn)</span>}</td>
                     <td className="p-3 text-right text-[var(--on-surface-variant)] text-xs">{new Date().toISOString().slice(0, 16)}</td>
                     <td className="p-3 text-center">
@@ -792,10 +803,8 @@ export default function ProjectDetail() {
             );
           })()}
 
-          {project.pooledExplorerUrl && <a href={project.pooledExplorerUrl} target="_blank" className="text-xs underline block mt-3">Locked tx: {project.pooledTxid?.slice(0,10)} ↗</a>}
-          {project.withdrawExplorerUrl && (
-            <a href={project.withdrawExplorerUrl} target="_blank" className="block mt-1 text-xs underline">Withdraw tx ↗</a>
-          )}
+          {project.pooledTxid && <div className="text-xs mt-3">Locked tx: <ExplorerLink value={project.pooledTxid} kind="tx" /></div>}
+          {project.withdrawTxid && <div className="text-xs mt-1">Settlement tx: <ExplorerLink value={project.withdrawTxid} kind="tx" /></div>}
         </div>
 
         {/* Milestone details */}

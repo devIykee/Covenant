@@ -7,8 +7,9 @@ import { toast } from "sonner";
 import { formatUsdcx } from "@/src/lib/units";
 import { formatDeadline } from "@/src/lib/format";
 import { NextStep } from "@/src/components/NextStep";
+import { ExplorerLink } from "@/src/components/ExplorerLink";
 
-interface Backer { principal: string; amount: string; depositExplorerUrl: string | null }
+interface Backer { principal: string; amount: string; depositTxid: string | null; depositExplorerUrl: string | null }
 interface DashProject {
   id: string;
   title: string;
@@ -37,7 +38,8 @@ function badge(status: string) {
     POOLED_LOCKED: "bg-[var(--ink)]/15 text-[var(--ink)]",
     DISPUTE_WINDOW: "bg-[var(--ink)]/15 text-[var(--ink)]",
   };
-  return <span className={`text-[10px] font-label-caps px-2 py-0.5 rounded ${map[status] || "bg-[var(--ink)]/10 text-[var(--ink)]"}`}>{status.replace("_", " ")}</span>;
+  const locked = status === "POOLED_LOCKED" || status === "DISPUTE_WINDOW";
+  return <span className={`text-[10px] font-label-caps px-2 py-0.5 rounded ${map[status] || "bg-[var(--ink)]/10 text-[var(--ink)]"}`}>{locked ? "🔒 " : ""}{status.replace("_", " ")}</span>;
 }
 
 export default function Dashboard() {
@@ -169,10 +171,10 @@ export default function Dashboard() {
                       <div className="space-y-1">
                         {p.backers.map((inv, i) => (
                           <div key={i} className="flex justify-between text-xs font-data-sm">
-                            <span>{inv.principal.slice(0, 12)}…{inv.principal.slice(-4)}</span>
+                            <ExplorerLink value={inv.principal} kind="address" />
                             <span className="flex items-center gap-2">
                               {usd(inv.amount)} USDCx
-                              {inv.depositExplorerUrl && <a href={inv.depositExplorerUrl} target="_blank" rel="noreferrer" className="underline text-[var(--on-surface-variant)] hover:text-[var(--ink)]">↗</a>}
+                              {inv.depositTxid && <ExplorerLink value={inv.depositTxid} kind="tx" label="tx" />}
                             </span>
                           </div>
                         ))}

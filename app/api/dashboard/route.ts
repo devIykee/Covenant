@@ -43,6 +43,7 @@ export async function GET(req: NextRequest) {
       backers: active.map((c: any) => ({
         principal: c.principal,
         amount: c.amount,
+        depositTxid: c.depositTxid,
         depositExplorerUrl: c.depositExplorerUrl,
       })),
     };
