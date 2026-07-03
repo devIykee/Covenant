@@ -37,6 +37,7 @@ export interface ReconcileResult {
     | "noop"
     | "waiting_deadline"
     | "waiting_confirmation"
+    | "locked_setup"
     | "paid_initial"
     | "withdrew"
     | "paid_milestone"
@@ -81,36 +82,75 @@ export async function reconcileProgram(programId: string): Promise<ReconcileResu
   const award = program.award;
   if (award.status !== "ACTIVE") return { programId, action: "not_awarded" };
 
-  // --- Step 0: upfront payment on acceptance (paid once, not deadline-gated) ---
-  // The upfront % was never locked — it sits in the custodian's plain balance.
-  // Gate it on accept's lock transaction confirming, so the two custodian-signed
-  // transactions never collide on a nonce.
-  const initialMicro = BigInt(award.initialAmount || "0");
-  if (award.initialBps > 0 && initialMicro > BigInt(0) && !award.initialTxid) {
-    if (program.lockTxid) {
-      const ls = await getTxStatus(program.lockTxid);
-      if (ls !== "success") {
-        return { programId, action: "waiting_confirmation", detail: `lock ${ls}` };
-      }
-    }
+  const milestones = award.milestones;
+  const firstMs = milestones.find((m) => m.index === 0);
+  if (!firstMs) return { programId, action: "noop", detail: "no milestones" };
+
+  // ================= SETUP PHASE (runs before any deadline logic) =================
+  // Every custodian-signed transaction is broadcast only after the previous one has
+  // CONFIRMED, so two txs never share a nonce (which is what silently dropped the
+  // earlier upfront payment). Each step also self-heals: a confirmed-failed tx is
+  // cleared and retried on the next call.
+
+  // Setup Step 1 — lock the remaining pool (everything the milestones will pay out)
+  // until the first milestone's deadline. Depends on the gas top-up having confirmed;
+  // if it hasn't, the broadcast throws and we simply wait and retry.
+  const lockAmount = sumMicro(milestones.map((m) => m.amount)); // = pool - upfront
+  if (!program.lockTxid) {
     try {
-      const p = await transferFromProgram(programId, award.builderAddress, award.initialAmount, "Covenant upfront payment");
-      await db.$transaction([
-        db.award.update({ where: { id: award.id }, data: { initialTxid: p.txid, initialExplorerUrl: p.explorerUrl } }),
-        db.distribution.create({
-          data: { awardId: award.id, recipient: award.builderAddress, amount: award.initialAmount, txid: p.txid, explorerUrl: p.explorerUrl, kind: "INITIAL_PAYOUT" },
-        }),
-        db.programStateLog.create({
-          data: { programId, status: "AWARDED", note: `Upfront payment (${award.initialBps / 100}%) sent to builder`, txid: p.txid, explorerUrl: p.explorerUrl },
-        }),
-      ]);
-      return { programId, action: "paid_initial", txid: p.txid, detail: "upfront payment sent to builder" };
+      const lock = await lockPoolForProgram(programId, lockAmount.toString(), firstMs.deadlineBlock);
+      await db.grantProgram.update({ where: { id: programId }, data: { lockTxid: lock.txid, lockExplorerUrl: lock.explorerUrl } });
+      await db.programStateLog.create({
+        data: { programId, status: "AWARDED", note: "Remaining pool locked in FlowVault", txid: lock.txid, explorerUrl: lock.explorerUrl },
+      });
+      return { programId, action: "locked_setup", txid: lock.txid, detail: "locked remaining pool" };
     } catch (err: any) {
-      return { programId, action: "error", detail: err?.message || String(err) };
+      // Most often: gas top-up not yet confirmed. Wait and retry next call.
+      return { programId, action: "waiting_confirmation", detail: `lock pending (${err?.message || "gas confirming"})` };
     }
   }
+  {
+    const ls = await getTxStatus(program.lockTxid);
+    if (ls === "failed") {
+      await db.grantProgram.update({ where: { id: programId }, data: { lockTxid: null, lockExplorerUrl: null } });
+      return { programId, action: "waiting_confirmation", detail: "lock failed — retrying" };
+    }
+    if (ls !== "success") return { programId, action: "waiting_confirmation", detail: `lock ${ls}` };
+  }
 
-  const milestones = award.milestones;
+  // Setup Step 2 — the upfront payment (paid from the custodian's unlocked balance).
+  const initialMicro = BigInt(award.initialAmount || "0");
+  if (award.initialBps > 0 && initialMicro > BigInt(0)) {
+    if (award.initialTxid) {
+      const s = await getTxStatus(award.initialTxid);
+      if (s === "failed") {
+        // Roll back so it re-sends cleanly (drop the ledger row too).
+        await db.distribution.deleteMany({ where: { awardId: award.id, kind: "INITIAL_PAYOUT" } });
+        await db.award.update({ where: { id: award.id }, data: { initialTxid: null, initialExplorerUrl: null } });
+        return { programId, action: "waiting_confirmation", detail: "upfront failed — retrying" };
+      }
+      if (s !== "success") return { programId, action: "waiting_confirmation", detail: `upfront ${s}` };
+      // confirmed — fall through to milestone logic
+    } else {
+      try {
+        const p = await transferFromProgram(programId, award.builderAddress, award.initialAmount, "Covenant upfront payment");
+        await db.$transaction([
+          db.award.update({ where: { id: award.id }, data: { initialTxid: p.txid, initialExplorerUrl: p.explorerUrl } }),
+          db.distribution.create({
+            data: { awardId: award.id, recipient: award.builderAddress, amount: award.initialAmount, txid: p.txid, explorerUrl: p.explorerUrl, kind: "INITIAL_PAYOUT" },
+          }),
+          db.programStateLog.create({
+            data: { programId, status: "AWARDED", note: `Upfront payment (${award.initialBps / 100}%) sent to builder`, txid: p.txid, explorerUrl: p.explorerUrl },
+          }),
+        ]);
+        return { programId, action: "paid_initial", txid: p.txid, detail: "upfront payment sent to builder" };
+      } catch (err: any) {
+        return { programId, action: "waiting_confirmation", detail: `upfront pending (${err?.message || "retrying"})` };
+      }
+    }
+  }
+  // ================= END SETUP PHASE =================
+
   const idx = award.activeMilestoneIndex;
   const active = milestones.find((m) => m.index === idx);
   if (!active) return { programId, action: "noop", detail: "no active milestone" };

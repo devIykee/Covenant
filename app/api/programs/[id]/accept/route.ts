@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/src/lib/db";
 import { eqAddr } from "@/src/lib/address";
-import { fundGasForProgram, lockPoolForProgram, getProgramCustodianAddress } from "@/src/lib/escrow";
+import { fundGasForProgram, getProgramCustodianAddress } from "@/src/lib/escrow";
+import { reconcileProgram } from "@/src/lib/reconcile";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -145,28 +146,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }),
   ]);
 
-  // --- on-chain: gas the custodian, then lock the whole pool until milestone #1 ---
+  // --- on-chain: only gas the custodian here (a master-signed tx, so it can't
+  // collide with the custodian's own nonce). Every custodian-signed step — locking
+  // the remainder, the upfront payment, and each milestone payout — is performed by
+  // the reconcile engine, ONE confirmed transaction at a time, so nothing races an
+  // unconfirmed nonce. This is why the lock/upfront no longer fail intermittently.
   const custodian = program.custodianAddress || getProgramCustodianAddress(id);
-  const first = award.milestones[0];
-  try {
-    // Top up gas first (best effort — if the custodian already has STX this still helps).
-    await fundGasForProgram(id).catch((e) => console.warn(`[accept ${id}] gas top-up warning:`, e?.message));
+  await fundGasForProgram(id).catch((e) => console.warn(`[accept ${id}] gas top-up warning:`, e?.message));
 
-    // Lock only the remainder (pool minus the upfront amount, which stays in the
-    // custodian's plain balance for the reconcile engine to pay out first).
-    const toLock = remainder.toString();
-    const lock = await lockPoolForProgram(id, toLock, first.deadlineBlock);
-    await db.grantProgram.update({ where: { id }, data: { lockTxid: lock.txid, lockExplorerUrl: lock.explorerUrl } });
-    await db.programStateLog.create({
-      data: { programId: id, status: "AWARDED", note: `Remaining pool locked in FlowVault until milestone 1`, txid: lock.txid, explorerUrl: lock.explorerUrl },
-    });
+  // Kick the engine so setup can begin as soon as gas confirms (best effort).
+  reconcileProgram(id).catch(() => {});
 
-    return NextResponse.json({ ok: true, awardId: award.id, custodianAddress: custodian, lockTxid: lock.txid, lockExplorerUrl: lock.explorerUrl });
-  } catch (e: any) {
-    // The award exists; surface the lock failure so the grantor can retry via sync.
-    return NextResponse.json(
-      { ok: true, awardId: award.id, custodianAddress: custodian, lockError: e?.message || "Lock failed — retry via program sync.", partial: true },
-      { status: 202 }
-    );
-  }
+  return NextResponse.json({ ok: true, awardId: award.id, custodianAddress: custodian, setupPending: true });
 }
