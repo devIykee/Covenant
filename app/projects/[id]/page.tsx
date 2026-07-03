@@ -242,7 +242,7 @@ export default function ProgramDetail() {
                 <p className="text-sm mb-2">{a.pitch}</p>
                 {a.contact ? <p className="text-xs text-[var(--on-surface-variant)] mb-2">Contact: {a.contact}</p> : null}
                 {awardOpenFor === a.id ? (
-                  <AwardForm onCancel={() => setAwardOpenFor(null)} onSubmit={() => submitAward(a.id)} />
+                  AwardForm({ onCancel: () => setAwardOpenFor(null), onSubmit: () => submitAward(a.id) })
                 ) : (
                   <button disabled={busy} onClick={() => setAwardOpenFor(a.id)} className="btn-secondary text-xs">AWARD TO THIS BUILDER →</button>
                 )}
@@ -355,7 +355,7 @@ export default function ProgramDetail() {
         {/* Current state + the single available action */}
         <section id="tour-state" className="card-container p-6 mb-8">
           <div className="font-label-caps text-[10px] text-[var(--on-surface-variant)] mb-3">CURRENT STATE — {program.status.replace("_", " ")}</div>
-          <ActionPanel />
+          {ActionPanel()}
         </section>
 
         {/* Milestone checklist */}
