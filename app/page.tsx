@@ -42,7 +42,7 @@ export default async function CovenantHome() {
             Grants that release milestone-by-milestone, only when the work is verified.
           </h1>
           <p className="font-body-lg text-lg md:text-[18px] leading-[28px] text-[var(--on-surface-variant)]">
-            A <strong className="text-[var(--ink)]">grantor</strong> locks a pool into a dedicated escrow. A <strong className="text-[var(--ink)]">builder</strong> is awarded the grant against a milestone schedule. As independent <strong className="text-[var(--ink)]">judges</strong> attest each milestone met, that tranche is <strong className="text-[var(--ink)]">automatically disbursed</strong> — and any milestone that lapses un-attested returns its funds to the grantor.
+            A <strong className="text-[var(--ink)]">grantor</strong> locks a pool into a dedicated escrow. A <strong className="text-[var(--ink)]">builder</strong> is awarded the grant against a milestone schedule. As independent <strong className="text-[var(--ink)]">judges</strong> attest each milestone met, that payment is <strong className="text-[var(--ink)]">automatically released</strong> — and any milestone that lapses un-attested returns its funds to the grantor.
           </p>
           <div id="tour-home-cta" className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/projects" className="btn-primary">
@@ -59,7 +59,7 @@ export default async function CovenantHome() {
           {[
             { n: "01", t: "Fund & lock the pool", d: "The grantor transfers the full pool into a per-program escrow custodian. A program can't be listed until its pool is locked on-chain." },
             { n: "02", t: "Award with milestones", d: "The grantor accepts one builder and defines the milestone schedule — each with its own deadline and % of the award." },
-            { n: "03", t: "Verify → auto-disburse", d: "Judges attest a milestone met and its tranche pays the builder automatically. A lapsed milestone returns its funds to the grantor." },
+            { n: "03", t: "Verify → auto-disburse", d: "Judges attest a milestone met and its payment goes to the builder automatically. A lapsed milestone returns its funds to the grantor." },
           ].map((s) => (
             <div key={s.n} className="border border-[var(--ink)]/10 rounded-sm p-5">
               <div className="font-data-lg text-[var(--brass)] text-sm mb-2">{s.n}</div>

@@ -143,9 +143,9 @@ export default function DocsPage() {
                   and <strong className="text-[var(--ink)]">cryptographically signs</strong> &ldquo;met&rdquo; / &ldquo;not met&rdquo;;
                   the server verifies the signature against their address.
                 </Step>
-                <Step n={4} title="Each tranche disburses — or expires — automatically">
+                <Step n={4} title="Each payment releases — or expires — automatically">
                   At a milestone&rsquo;s deadline the reconcile engine acts on its own: if judges attested MET it{" "}
-                  <code className="font-data-sm">withdraw</code>s and pays that tranche to the builder, then re-locks the
+                  <code className="font-data-sm">withdraw</code>s and pays that milestone amount to the builder, then re-locks the
                   remainder until the next deadline. If the deadline passed <strong className="text-[var(--ink)]">un-attested</strong>,
                   the remaining pool is returned to the grantor and the program ends. No manual &ldquo;release&rdquo; button.
                 </Step>
@@ -254,7 +254,7 @@ STACKS_PRIVATE_KEY   (your funded custodian key)`}</Code>
               </Step>
               <Step n={6} title="Build → attest → auto-disburse">
                 The builder marks a milestone <strong className="text-[var(--ink)]">ready for review</strong>; judges sign{" "}
-                <strong className="text-[var(--ink)]">MET</strong>. At that milestone&rsquo;s deadline the tranche pays the builder
+                <strong className="text-[var(--ink)]">MET</strong>. At that milestone&rsquo;s deadline the payment goes to the builder
                 automatically and the remainder re-locks for the next one. A milestone that lapses un-attested returns its funds to the grantor —
                 no manual settlement, every transfer logged with an explorer link.
               </Step>
@@ -267,12 +267,12 @@ STACKS_PRIVATE_KEY   (your funded custodian key)`}</Code>
           {/* 6. Vault types */}
           <section id="vaulttypes" className="scroll-mt-24">
             <h2 className="font-headline-md text-2xl mb-3">6. The vault types</h2>
-            <p className="text-sm text-[var(--on-surface-variant)] mb-4">The <strong className="text-[var(--ink)]">Milestone-Based Grant</strong> is the flagship — a grantor-funded pool disbursed tranche-by-tranche to one builder as independent judges verify each milestone. The other three are secondary behaviors built on the same escrow + FlowVault primitives. All execute real on-chain USDCx transfers.</p>
+            <p className="text-sm text-[var(--on-surface-variant)] mb-4">The <strong className="text-[var(--ink)]">Milestone-Based Grant</strong> is the flagship — a grantor-funded pool disbursed milestone-by-milestone to one builder as independent judges verify each milestone. The other three are secondary behaviors built on the same escrow + FlowVault primitives. All execute real on-chain USDCx transfers.</p>
             <div className="grid sm:grid-cols-2 gap-4">
               <Link href="/projects" className="card-container p-5 block hover:opacity-80 transition-opacity">
                 <div className="font-label-caps text-xs text-[var(--on-surface-variant)]">GRANT · LIVE</div>
                 <div className="font-semibold mt-1">Milestone-Based Grant</div>
-                <p className="text-sm text-[var(--on-surface-variant)] mt-1">A grantor locks a pool; each milestone&rsquo;s tranche auto-disburses to the awarded builder when judges attest it met, or returns to the grantor if it lapses.</p>
+                <p className="text-sm text-[var(--on-surface-variant)] mt-1">A grantor locks a pool; each milestone&rsquo;s payment auto-releases to the awarded builder when judges attest it met, or returns to the grantor if it lapses.</p>
               </Link>
               <Link href="/vaults/payroll" className="card-container p-5 block hover:opacity-80 transition-opacity">
                 <div className="font-label-caps text-xs text-[var(--on-surface-variant)]">PAYROLL · LIVE</div>

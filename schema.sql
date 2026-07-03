@@ -1,3 +1,5 @@
+Loaded Prisma config from prisma.config.ts.
+
 -- CreateTable
 CREATE TABLE "GrantProgram" (
     "id" TEXT NOT NULL PRIMARY KEY,
@@ -40,6 +42,10 @@ CREATE TABLE "Award" (
     "judges" TEXT NOT NULL DEFAULT '[]',
     "status" TEXT NOT NULL DEFAULT 'ACTIVE',
     "activeMilestoneIndex" INTEGER NOT NULL DEFAULT 0,
+    "initialBps" INTEGER NOT NULL DEFAULT 0,
+    "initialAmount" TEXT NOT NULL DEFAULT '0',
+    "initialTxid" TEXT,
+    "initialExplorerUrl" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "Award_programId_fkey" FOREIGN KEY ("programId") REFERENCES "GrantProgram" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );

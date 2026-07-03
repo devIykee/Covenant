@@ -10,11 +10,12 @@ import { GuidedTour, type TourStep } from "@/src/components/GuidedTour";
 import { transferUsdcxTo } from "@/src/lib/deposit";
 import { getCurrentBlockHeight } from "@/src/lib/flowvault";
 import { formatUsdcx } from "@/src/lib/units";
+import { formatDeadline } from "@/src/lib/format";
 import { eqAddr, includesAddr } from "@/src/lib/address";
 
 const DETAIL_TOUR: TourStep[] = [
   { selector: "#tour-state", title: "Current state", body: "This program's live status. The one action available to you (given your role and the state) appears right below it — nothing else." },
-  { selector: "#tour-milestones", title: "Milestone checklist", body: "Once awarded, each tranche shows its deadline, share, and state. The active milestone is highlighted; its tranche auto-pays the builder when judges attest it MET before the deadline." },
+  { selector: "#tour-milestones", title: "Milestone checklist", body: "Once awarded, each milestone shows its deadline, share, and state. The active milestone is highlighted; its payment auto-releases to the builder when judges attest it MET before the deadline." },
 ];
 
 const BLOCKS_PER_HOUR = 144;
@@ -44,6 +45,7 @@ export default function ProgramDetail() {
   // grantor award form
   const [awardOpenFor, setAwardOpenFor] = useState<string | null>(null);
   const [judgesText, setJudgesText] = useState("");
+  const [initialPct, setInitialPct] = useState("0");
   const [rows, setRows] = useState<MilestoneRow[]>([{ name: "", percent: "", deadlineDate: "" }]);
 
   const load = useCallback(async () => {
@@ -54,9 +56,29 @@ export default function ProgramDetail() {
     if (data.currentBlock) setCurrentBlock(data.currentBlock);
   }, [id]);
 
+  // Keep the connected wallet in sync — reflect connect/disconnect/switch made in
+  // the nav or another tab without a manual refresh.
   useEffect(() => {
-    if (typeof window !== "undefined") setConnectedAddr(localStorage.getItem("covenant-address"));
+    const readAddr = () => {
+      const a = typeof window !== "undefined" ? localStorage.getItem("covenant-address") : null;
+      setConnectedAddr((prev) => (prev === a ? prev : a));
+    };
+    readAddr();
+    window.addEventListener("storage", readAddr);
+    window.addEventListener("focus", readAddr);
+    const t = setInterval(readAddr, 3000);
+    return () => { window.removeEventListener("storage", readAddr); window.removeEventListener("focus", readAddr); clearInterval(t); };
+  }, []);
+
+  // Initial load + live polling so state changes (funding verified, award accepted,
+  // upfront/milestone paid, expiry) appear on their own — no refresh needed.
+  useEffect(() => {
     load();
+    const t = setInterval(load, 12000);
+    const onFocus = () => load();
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => { clearInterval(t); window.removeEventListener("focus", onFocus); document.removeEventListener("visibilitychange", onFocus); };
   }, [load]);
 
   const isGrantor = program && eqAddr(connectedAddr, program.grantorAddress);
@@ -135,6 +157,7 @@ export default function ProgramDetail() {
     try {
       const judgeList = judgesText.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean);
       if (judgeList.length === 0) throw new Error("Add at least one judge address.");
+      const initBps = Math.round((Number(initialPct) || 0) * 100);
       const current = await getCurrentBlockHeight();
       const milestones = rows.map((r) => {
         if (!r.name || !r.percent || !r.deadlineDate) throw new Error("Every milestone needs a name, %, and deadline.");
@@ -146,13 +169,15 @@ export default function ProgramDetail() {
           deadlineAt: new Date(r.deadlineDate).toISOString(),
         };
       });
+      const total = initBps + milestones.reduce((s, m) => s + m.percentBps, 0);
+      if (total !== 10000) throw new Error(`Upfront % + milestone %s must total 100% (currently ${total / 100}%).`);
       const res = await fetch(`/api/programs/${id}/accept`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ grantorAddress: connectedAddr, applicationId, judges: judgeList, milestones }),
+        body: JSON.stringify({ grantorAddress: connectedAddr, applicationId, judges: judgeList, milestones, initialBps: initBps }),
       });
       const data = await res.json();
       if (!res.ok && !data.ok) throw new Error(data.error);
-      toast.success(data.partial ? "Awarded — finalizing on-chain lock…" : "Awarded and pool locked. Milestones are live.");
+      toast.success(data.partial ? "Awarded — finalizing on-chain lock…" : "Awarded. Upfront payment + milestone schedule are live.");
       setAwardOpenFor(null); await load();
     } catch (e: any) { toast.error(e.message); }
     finally { setBusy(false); }
@@ -269,16 +294,20 @@ export default function ProgramDetail() {
           return <div className="space-y-2"><p className="text-sm text-[var(--on-surface-variant)]">You&rsquo;re building milestone <strong className="text-[var(--ink)]">M{activeMs.index + 1}: {activeMs.name}</strong>. When it&rsquo;s done, tell the judges.</p>
             <button disabled={busy} onClick={markReady} className="btn-primary w-full disabled:opacity-50">{busy ? "…" : "MARK MILESTONE READY FOR REVIEW"}</button></div>;
         }
-        return <Info>Milestone <strong className="text-[var(--ink)]">M{activeMs.index + 1}</strong> is in review. Its tranche auto-pays to you when judges attest MET before the deadline.</Info>;
+        return <Info>Milestone <strong className="text-[var(--ink)]">M{activeMs.index + 1}</strong> is in review. Its payment auto-releases to you when judges attest MET before the deadline.</Info>;
       }
       if (isJudge && activeMs) {
         if (activeMs.status === "PAID" || activeMs.status === "EXPIRED") return <Info>Nothing to attest right now.</Info>;
+        const myVote = (activeMs.attestations || []).find((a: any) => eqAddr(a.judge, connectedAddr))?.vote as string | undefined;
         return (
           <div className="space-y-2">
-            <p className="text-sm text-[var(--on-surface-variant)]">Attest milestone <strong className="text-[var(--ink)]">M{activeMs.index + 1}: {activeMs.name}</strong>. Your wallet signs the vote; the tranche releases automatically at the deadline if MET reaches {Math.min(2, judges.length)}-of-{judges.length}.</p>
+            <p className="text-sm text-[var(--on-surface-variant)]">Attest milestone <strong className="text-[var(--ink)]">M{activeMs.index + 1}: {activeMs.name}</strong>. Your wallet signs the vote; the payment releases automatically at the deadline if MET reaches {Math.min(2, judges.length)}-of-{judges.length}.</p>
+            {myVote ? (
+              <p className="text-sm text-[var(--brass)]">✓ You attested <strong>{myVote === "MET" ? "MET" : "NOT MET"}</strong>. Waiting on the deadline and other judges.</p>
+            ) : null}
             <div className="flex gap-3">
-              <button disabled={busy} onClick={() => attest("MET")} className="btn-primary flex-1 disabled:opacity-50">ATTEST MET</button>
-              <button disabled={busy} onClick={() => attest("NOT_MET")} className="btn-secondary flex-1 disabled:opacity-50">ATTEST NOT MET</button>
+              <button disabled={busy || !!myVote} onClick={() => attest("MET")} className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed">{myVote === "MET" ? "ATTESTED MET ✓" : "ATTEST MET"}</button>
+              <button disabled={busy || !!myVote} onClick={() => attest("NOT_MET")} className="btn-secondary flex-1 disabled:opacity-50 disabled:cursor-not-allowed">{myVote === "NOT_MET" ? "ATTESTED NOT MET ✓" : "ATTEST NOT MET"}</button>
             </div>
           </div>
         );
@@ -297,16 +326,21 @@ export default function ProgramDetail() {
   }
 
   function AwardForm({ onCancel, onSubmit }: { onCancel: () => void; onSubmit: () => void }) {
-    const totalPct = rows.reduce((s, r) => s + (Number(r.percent) || 0), 0);
+    const totalPct = (Number(initialPct) || 0) + rows.reduce((s, r) => s + (Number(r.percent) || 0), 0);
     return (
       <div className="mt-3 space-y-3 border-t border-[var(--ink)]/10 pt-3">
         <div>
           <label className="block font-label-caps text-[10px] text-[var(--on-surface-variant)] mb-1">JUDGES (one address per line/comma)</label>
           <textarea value={judgesText} onChange={(e) => setJudgesText(e.target.value)} className="input-line w-full px-3 py-2 text-xs font-data-sm resize-y" rows={2} placeholder="ST... , ST..." />
         </div>
+        <div>
+          <label className="block font-label-caps text-[10px] text-[var(--on-surface-variant)] mb-1">UPFRONT PAYMENT ON ACCEPTANCE (%)</label>
+          <input type="number" min={0} max={90} value={initialPct} onChange={(e) => setInitialPct(e.target.value)} className="input-line w-28 px-2 py-1.5 text-xs" placeholder="0" />
+          <p className="text-[10px] text-[var(--on-surface-variant)] mt-1">Paid to the builder immediately when accepted. The milestones split the rest.</p>
+        </div>
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <label className="font-label-caps text-[10px] text-[var(--on-surface-variant)]">MILESTONES (percentages must sum to 100%)</label>
+            <label className="font-label-caps text-[10px] text-[var(--on-surface-variant)]">MILESTONES (upfront + milestones must total 100%)</label>
             <span className={`text-[10px] font-data-sm ${totalPct === 100 ? "text-[var(--brass)]" : "text-[var(--on-surface-variant)]"}`}>{totalPct}%</span>
           </div>
           {rows.map((r, i) => (
@@ -320,7 +354,7 @@ export default function ProgramDetail() {
           <button type="button" onClick={() => setRows([...rows, { name: "", percent: "", deadlineDate: "" }])} className="text-xs underline text-[var(--on-surface-variant)]">+ add milestone</button>
         </div>
         <div className="flex gap-2 pt-1">
-          <button disabled={busy} onClick={onSubmit} className="btn-primary text-xs flex-1 disabled:opacity-50">{busy ? "AWARDING…" : "CONFIRM AWARD & LOCK POOL"}</button>
+          <button disabled={busy} onClick={onSubmit} className="btn-primary text-xs flex-1 disabled:opacity-50">{busy ? "AWARDING…" : "CONFIRM AWARD & LOCK FUNDS"}</button>
           <button type="button" onClick={onCancel} className="btn-secondary text-xs">CANCEL</button>
         </div>
       </div>
@@ -340,9 +374,13 @@ export default function ProgramDetail() {
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8 text-sm">
           <Stat label="POOL" value={`${formatUsdcx(program.totalPool)} USDCx`} />
-          <Stat label="HORIZON" value={`block ${program.programDeadlineBlock}`} />
-          <Stat label="APPLICANTS" value={award ? "awarded" : String((program.applications || []).length)} />
-          <Stat label="BLOCK" value={currentBlock ? String(currentBlock) : "—"} />
+          <Stat label="HORIZON" value={formatDeadline(program.programDeadlineAt, program.programDeadlineBlock)} />
+          {award && award.initialBps > 0 ? (
+            <Stat label="UPFRONT" value={`${formatUsdcx(award.initialAmount)} USDCx · ${award.initialBps / 100}%`} />
+          ) : (
+            <Stat label="APPLICANTS" value={award ? "awarded" : String((program.applications || []).length)} />
+          )}
+          <Stat label="BUILDER" value={award ? `${award.builderAddress.slice(0, 8)}…` : "—"} />
         </div>
 
         {program.conditions ? (
@@ -376,7 +414,7 @@ export default function ProgramDetail() {
             <div className="space-y-2">
               {award.distributions.map((d: any) => (
                 <a key={d.id} href={d.explorerUrl} target="_blank" rel="noreferrer" className="flex justify-between items-center border border-[var(--ink)]/10 rounded-sm p-3 text-sm hover:bg-[var(--surface-container-low)]">
-                  <span>{d.kind === "MILESTONE_PAYOUT" ? "Milestone payout → builder" : "Return → grantor"}</span>
+                  <span>{d.kind === "INITIAL_PAYOUT" ? "Upfront payment → builder" : d.kind === "MILESTONE_PAYOUT" ? "Milestone payment → builder" : "Return → grantor"}</span>
                   <span className="font-data-sm">{formatUsdcx(d.amount)} USDCx ↗</span>
                 </a>
               ))}

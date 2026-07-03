@@ -48,10 +48,22 @@ export default function Dashboard() {
     }
   }, []);
 
+  // Track the connected wallet + poll so program state changes (acceptance, an
+  // upfront/milestone payment, expiry) and wallet switches show without a refresh.
   useEffect(() => {
-    const a = typeof window !== "undefined" ? localStorage.getItem("covenant-address") : null;
-    setAddr(a);
-    if (a) load(a);
+    let current = typeof window !== "undefined" ? localStorage.getItem("covenant-address") : null;
+    setAddr(current);
+    if (current) load(current);
+
+    const tick = () => {
+      const a = typeof window !== "undefined" ? localStorage.getItem("covenant-address") : null;
+      if (a !== current) { current = a; setAddr(a); }
+      if (a) load(a);
+    };
+    const t = setInterval(tick, 12000);
+    window.addEventListener("storage", tick);
+    window.addEventListener("focus", tick);
+    return () => { clearInterval(t); window.removeEventListener("storage", tick); window.removeEventListener("focus", tick); };
   }, [load]);
 
   if (!addr) {

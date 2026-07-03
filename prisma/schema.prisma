@@ -61,6 +61,10 @@ model Award {
   judges              String   @default("[]") // JSON array of judge principals (set by grantor)
   status              String   @default("ACTIVE") // ACTIVE | COMPLETED | FAILED
   activeMilestoneIndex Int     @default(0) // sequential pointer
+  initialBps          Int      @default(0)   // % of pool paid upfront on acceptance (basis points)
+  initialAmount       String   @default("0") // micro; upfront payment amount
+  initialTxid         String?  // upfront payment tx (custodian -> builder)
+  initialExplorerUrl  String?
   createdAt           DateTime @default(now())
 
   program             GrantProgram   @relation(fields: [programId], references: [id])

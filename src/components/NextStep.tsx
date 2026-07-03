@@ -47,10 +47,10 @@ function guidance(p: NextStepInput): { title: string; detail: string } {
     if (phase === 2) {
       if (!ms) return { title: "Grant in progress", detail: "Your award is active." };
       if (ms.status === "LOCKED") return { title: `Build M${ms.index + 1}: ${ms.name}`, detail: "When it's done, mark the milestone ready so judges can attest it." };
-      return { title: `M${ms.index + 1} in review`, detail: "Judges are attesting. The tranche auto-pays you at the deadline if they attest MET." };
+      return { title: `M${ms.index + 1} in review`, detail: "Judges are attesting. The payment auto-releases to you at the deadline if they attest MET." };
     }
     return p.status === "COMPLETED"
-      ? { title: "All milestones paid", detail: "You completed the grant — every tranche was disbursed to your wallet." }
+      ? { title: "All milestones paid", detail: "You completed the grant — every payment was disbursed to your wallet." }
       : { title: "Grant expired", detail: "A milestone deadline passed without attestation; remaining funds returned to the grantor." };
   }
 

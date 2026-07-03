@@ -1,6 +1,7 @@
 "use client";
 
 import { formatUsdcx } from "@/src/lib/units";
+import { formatDeadline, relativeTime } from "@/src/lib/format";
 
 export interface MilestoneView {
   index: number;
@@ -24,8 +25,8 @@ const STATE_META: Record<string, { label: string; cls: string }> = {
 };
 
 // Structured, always-visible milestone checklist — never a bare status string.
-// Shows every tranche's name, deadline, share, amount, and current state, and
-// marks which one is active (the only one that can be attested next).
+// Shows every milestone's name, deadline (real date), share, payment, and current
+// state, and marks which one is active (the only one that can be attested next).
 export function MilestoneList({
   milestones,
   activeIndex,
@@ -45,7 +46,7 @@ export function MilestoneList({
         const meta = STATE_META[m.status] ?? { label: m.status, cls: "stamp-locked" };
         const isActive = m.index === activeIndex && m.status !== "PAID" && m.status !== "EXPIRED";
         const metVotes = (m.attestations || []).filter((a) => a.vote === "MET").length;
-        const blocksLeft = m.deadlineBlock - currentBlock;
+        const past = m.deadlineAt ? new Date(m.deadlineAt).getTime() <= Date.now() : m.deadlineBlock - currentBlock <= 0;
         return (
           <li
             key={m.index}
@@ -61,11 +62,11 @@ export function MilestoneList({
                 {m.description ? <p className="text-sm text-[var(--on-surface-variant)] mb-2">{m.description}</p> : null}
                 <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-[var(--on-surface-variant)]">
                   <span>SHARE <span className="font-data-sm text-[var(--ink)]">{(m.percentBps / 100).toFixed(m.percentBps % 100 ? 2 : 0)}%</span></span>
-                  <span>TRANCHE <span className="font-data-sm text-[var(--ink)]">{formatUsdcx(m.amount)} USDCx</span></span>
-                  <span>DEADLINE <span className="font-data-sm text-[var(--ink)]">block {m.deadlineBlock}</span></span>
-                  {m.status !== "PAID" && m.status !== "EXPIRED" && currentBlock > 0 ? (
-                    <span className={blocksLeft > 0 ? "" : "text-[var(--brass)]"}>
-                      {blocksLeft > 0 ? `~${blocksLeft} blocks left` : "deadline reached"}
+                  <span>PAYMENT <span className="font-data-sm text-[var(--ink)]">{formatUsdcx(m.amount)} USDCx</span></span>
+                  <span>DEADLINE <span className="font-data-sm text-[var(--ink)]">{formatDeadline(m.deadlineAt, m.deadlineBlock)}</span></span>
+                  {m.status !== "PAID" && m.status !== "EXPIRED" ? (
+                    <span className={past ? "text-[var(--brass)]" : ""}>
+                      {past ? "deadline reached" : (m.deadlineAt ? relativeTime(m.deadlineAt) : "")}
                     </span>
                   ) : null}
                   {(m.attestations && m.attestations.length > 0 && m.status !== "PAID") ? (

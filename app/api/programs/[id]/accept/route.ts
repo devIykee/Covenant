@@ -23,11 +23,12 @@ interface MilestoneInput {
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const body = await req.json().catch(() => ({}));
-  const { grantorAddress, applicationId, judges, milestones } = body as {
+  const { grantorAddress, applicationId, judges, milestones, initialBps: initialBpsRaw } = body as {
     grantorAddress?: string;
     applicationId?: string;
     judges?: string[];
     milestones?: MilestoneInput[];
+    initialBps?: number;
   };
 
   const db = getDb();
@@ -75,18 +76,26 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     prevBlock = m.deadlineBlock;
     bpsSum += m.percentBps;
   }
-  if (bpsSum !== 10000) {
-    return NextResponse.json({ error: `Milestone percentages must sum to 100% (got ${bpsSum / 100}%).` }, { status: 400 });
+  // Upfront payment on acceptance: a % of the pool paid immediately, with the
+  // milestones splitting the remaining 100%. initial + milestones must equal 100%.
+  const initialBps = Math.round(Number(initialBpsRaw) || 0);
+  if (initialBps < 0 || initialBps > 9000) {
+    return NextResponse.json({ error: "Upfront payment must be between 0% and 90%." }, { status: 400 });
+  }
+  if (initialBps + bpsSum !== 10000) {
+    return NextResponse.json({ error: `Upfront % plus milestone %s must total 100% (got ${(initialBps + bpsSum) / 100}%).` }, { status: 400 });
   }
 
-  // Derive per-tranche micro amounts; the LAST milestone absorbs rounding so the
-  // sum of tranches exactly equals the pool.
+  // Derive micro amounts. The upfront amount is paid immediately; the remainder is
+  // split across milestones (last milestone absorbs rounding so the parts sum exactly).
   const pool = BigInt(program.totalPool);
+  const initialAmount = (pool * BigInt(initialBps)) / BigInt(10000);
+  const remainder = pool - initialAmount;
   const amounts: string[] = [];
   let allocated = BigInt(0);
   for (let i = 0; i < milestones.length; i++) {
     if (i === milestones.length - 1) {
-      amounts.push((pool - allocated).toString());
+      amounts.push((remainder - allocated).toString());
     } else {
       const a = (pool * BigInt(milestones[i].percentBps)) / BigInt(10000);
       amounts.push(a.toString());
@@ -104,6 +113,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       judges: JSON.stringify(judgeList),
       status: "ACTIVE",
       activeMilestoneIndex: 0,
+      initialBps,
+      initialAmount: initialAmount.toString(),
       milestones: {
         create: milestones.map((m, i) => ({
           index: i,
@@ -141,10 +152,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // Top up gas first (best effort — if the custodian already has STX this still helps).
     await fundGasForProgram(id).catch((e) => console.warn(`[accept ${id}] gas top-up warning:`, e?.message));
 
-    const lock = await lockPoolForProgram(id, program.totalPool, first.deadlineBlock);
+    // Lock only the remainder (pool minus the upfront amount, which stays in the
+    // custodian's plain balance for the reconcile engine to pay out first).
+    const toLock = remainder.toString();
+    const lock = await lockPoolForProgram(id, toLock, first.deadlineBlock);
     await db.grantProgram.update({ where: { id }, data: { lockTxid: lock.txid, lockExplorerUrl: lock.explorerUrl } });
     await db.programStateLog.create({
-      data: { programId: id, status: "AWARDED", note: `Pool locked in FlowVault until block ${first.deadlineBlock}`, txid: lock.txid, explorerUrl: lock.explorerUrl },
+      data: { programId: id, status: "AWARDED", note: `Remaining pool locked in FlowVault until milestone 1`, txid: lock.txid, explorerUrl: lock.explorerUrl },
     });
 
     return NextResponse.json({ ok: true, awardId: award.id, custodianAddress: custodian, lockTxid: lock.txid, lockExplorerUrl: lock.explorerUrl });

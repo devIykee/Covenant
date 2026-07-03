@@ -37,6 +37,7 @@ export interface ReconcileResult {
     | "noop"
     | "waiting_deadline"
     | "waiting_confirmation"
+    | "paid_initial"
     | "withdrew"
     | "paid_milestone"
     | "relocked"
@@ -79,6 +80,35 @@ export async function reconcileProgram(programId: string): Promise<ReconcileResu
 
   const award = program.award;
   if (award.status !== "ACTIVE") return { programId, action: "not_awarded" };
+
+  // --- Step 0: upfront payment on acceptance (paid once, not deadline-gated) ---
+  // The upfront % was never locked — it sits in the custodian's plain balance.
+  // Gate it on accept's lock transaction confirming, so the two custodian-signed
+  // transactions never collide on a nonce.
+  const initialMicro = BigInt(award.initialAmount || "0");
+  if (award.initialBps > 0 && initialMicro > BigInt(0) && !award.initialTxid) {
+    if (program.lockTxid) {
+      const ls = await getTxStatus(program.lockTxid);
+      if (ls !== "success") {
+        return { programId, action: "waiting_confirmation", detail: `lock ${ls}` };
+      }
+    }
+    try {
+      const p = await transferFromProgram(programId, award.builderAddress, award.initialAmount, "Covenant upfront payment");
+      await db.$transaction([
+        db.award.update({ where: { id: award.id }, data: { initialTxid: p.txid, initialExplorerUrl: p.explorerUrl } }),
+        db.distribution.create({
+          data: { awardId: award.id, recipient: award.builderAddress, amount: award.initialAmount, txid: p.txid, explorerUrl: p.explorerUrl, kind: "INITIAL_PAYOUT" },
+        }),
+        db.programStateLog.create({
+          data: { programId, status: "AWARDED", note: `Upfront payment (${award.initialBps / 100}%) sent to builder`, txid: p.txid, explorerUrl: p.explorerUrl },
+        }),
+      ]);
+      return { programId, action: "paid_initial", txid: p.txid, detail: "upfront payment sent to builder" };
+    } catch (err: any) {
+      return { programId, action: "error", detail: err?.message || String(err) };
+    }
+  }
 
   const milestones = award.milestones;
   const idx = award.activeMilestoneIndex;
