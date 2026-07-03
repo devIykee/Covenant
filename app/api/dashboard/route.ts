@@ -1,66 +1,95 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/src/lib/db";
+import { getDb } from "@/src/lib/db";
 import { eqAddr } from "@/src/lib/address";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-// Returns everything relevant to one wallet: campaigns they built, and campaigns
-// they backed. "raised" counts only ACTIVE (non-withdrawn) contributions.
+// Returns everything relevant to one wallet under the grant model:
+// programs they created (grantor), programs they applied to / are building
+// (builder), and programs where they are a named judge.
 export async function GET(req: NextRequest) {
   const address = req.nextUrl.searchParams.get("address") || "";
-  if (!address) return NextResponse.json({ asBuilder: [], asBacker: [] });
+  if (!address) return NextResponse.json({ asGrantor: [], asBuilder: [], asJudge: [] });
 
-  const projects = await db.project
-    .findMany({ orderBy: { createdAt: "desc" }, include: { contributions: true } })
-    .catch(() => []);
+  const db = getDb();
+  const programs = await db.grantProgram
+    .findMany({
+      orderBy: { createdAt: "desc" },
+      include: {
+        applications: true,
+        award: { include: { milestones: { orderBy: { index: "asc" } }, distributions: true } },
+      },
+    })
+    .catch(() => [] as any[]);
 
   const shape = (p: any) => {
-    const active = p.contributions.filter((c: any) => c.status !== "WITHDRAWN");
-    const raised = active.reduce((s: bigint, c: any) => s + BigInt(c.amount), BigInt(0));
-    const goal = BigInt(p.fundingGoal);
-    const minRequired = (goal * BigInt(p.minFundingBps ?? 10000)) / BigInt(10000);
-    const metMin = raised >= minRequired || p.builderAcceptedPartial;
     let judges: string[] = [];
-    try { judges = JSON.parse(p.judges || "[]"); } catch { judges = []; }
+    try {
+      judges = JSON.parse(p.award?.judges || "[]");
+    } catch {
+      judges = [];
+    }
     return {
       id: p.id,
       title: p.title,
       status: p.status,
-      fundingGoal: p.fundingGoal,
-      minFundingBps: p.minFundingBps ?? 10000,
-      builderAcceptedPartial: p.builderAcceptedPartial ?? false,
-      builderAddress: p.builderAddress,
-      deadlineAt: p.deadlineAt,
-      deadlineBlock: p.deadlineBlock,
+      totalPool: p.totalPool,
+      grantorAddress: p.grantorAddress,
+      custodianAddress: p.custodianAddress,
+      programDeadlineAt: p.programDeadlineAt,
+      programDeadlineBlock: p.programDeadlineBlock,
+      fundExplorerUrl: p.fundExplorerUrl,
+      lockExplorerUrl: p.lockExplorerUrl,
+      applicationCount: p.applications.length,
       judges,
-      pooledExplorerUrl: p.pooledExplorerUrl,
-      withdrawExplorerUrl: p.withdrawExplorerUrl,
-      raised: raised.toString(),
-      minRequired: minRequired.toString(),
-      metMin,
-      judgeCount: judges.length,
-      backers: active.map((c: any) => ({
-        principal: c.principal,
-        amount: c.amount,
-        depositTxid: c.depositTxid,
-        depositExplorerUrl: c.depositExplorerUrl,
-      })),
+      award: p.award
+        ? {
+            id: p.award.id,
+            builderAddress: p.award.builderAddress,
+            amount: p.award.amount,
+            status: p.award.status,
+            activeMilestoneIndex: p.award.activeMilestoneIndex,
+            milestones: p.award.milestones.map((m: any) => ({
+              index: m.index,
+              name: m.name,
+              deadlineBlock: m.deadlineBlock,
+              deadlineAt: m.deadlineAt,
+              percentBps: m.percentBps,
+              amount: m.amount,
+              status: m.status,
+              payoutExplorerUrl: m.payoutExplorerUrl,
+            })),
+          }
+        : null,
     };
   };
 
-  const asBuilder = projects.filter((p: any) => eqAddr(p.builderAddress, address)).map(shape);
-  const asBacker = projects
-    .filter((p: any) => p.contributions.some((c: any) => eqAddr(c.principal, address)))
+  const asGrantor = programs.filter((p: any) => eqAddr(p.grantorAddress, address)).map(shape);
+
+  const asBuilder = programs
+    .filter(
+      (p: any) =>
+        p.applications.some((a: any) => eqAddr(a.builderAddress, address)) ||
+        (p.award && eqAddr(p.award.builderAddress, address))
+    )
     .map((p: any) => {
       const base = shape(p);
-      const mine = p.contributions.filter((c: any) => eqAddr(c.principal, address));
-      const myActive = mine
-        .filter((c: any) => c.status !== "WITHDRAWN")
-        .reduce((s: bigint, c: any) => s + BigInt(c.amount), BigInt(0));
-      const myWithdrawn = mine.some((c: any) => c.status === "WITHDRAWN");
-      return { ...base, myContribution: myActive.toString(), myWithdrawn };
+      const myApp = p.applications.find((a: any) => eqAddr(a.builderAddress, address));
+      return { ...base, myApplicationStatus: myApp?.status ?? null };
     });
 
-  return NextResponse.json({ asBuilder, asBacker });
+  const asJudge = programs
+    .filter((p: any) => {
+      let judges: string[] = [];
+      try {
+        judges = JSON.parse(p.award?.judges || "[]");
+      } catch {
+        judges = [];
+      }
+      return judges.some((j) => eqAddr(j, address));
+    })
+    .map(shape);
+
+  return NextResponse.json({ asGrantor, asBuilder, asJudge });
 }

@@ -49,13 +49,13 @@ async function wipe(table) {
 
 (async () => {
   console.log(`Target: ${url.replace(/\/\/.*@/, "//…@")}`);
-  const before = await count("Project");
-  console.log(`Covenants before: ${before}`);
+  const before = await count("GrantProgram");
+  console.log(`Grant programs before: ${before}`);
 
-  // Children first (FK-safe), then the covenants.
-  const childTables = ["BackerContribution", "JudgeAttestation", "ProjectStateLog", "Distribution"];
+  // Children first (FK-safe), then the programs.
+  const childTables = ["MilestoneAttestation", "Milestone", "Distribution", "Award", "Application", "ProgramStateLog"];
   for (const t of childTables) console.log(`  ${t}: deleted ${await wipe(t)}`);
-  console.log(`  Project: deleted ${await wipe("Project")}`);
+  console.log(`  GrantProgram: deleted ${await wipe("GrantProgram")}`);
 
   if (alsoSecondary) {
     console.log("Also clearing secondary vaults (--all):");
@@ -64,7 +64,7 @@ async function wipe(table) {
     }
   }
 
-  console.log(`\n✅ Done. Covenants remaining: ${await count("Project")}`);
+  console.log(`\n✅ Done. Grant programs remaining: ${await count("GrantProgram")}`);
 })().catch((e) => {
   console.error("Failed:", e.message);
   process.exit(1);

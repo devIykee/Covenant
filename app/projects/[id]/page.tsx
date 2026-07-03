@@ -1,820 +1,403 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { Nav } from "@/src/components/Nav";
-import { GuidedTour, type TourStep } from "@/src/components/GuidedTour";
 import { toast } from "sonner";
-import Link from "next/link";
-import { formatUsdcx, toMicro, fromMicro } from "@/src/lib/units";
-import { formatDeadline, formatDateTime } from "@/src/lib/format";
+import { request } from "@stacks/connect";
+import { MilestoneList } from "@/src/components/MilestoneList";
+import { GuidedTour, type TourStep } from "@/src/components/GuidedTour";
+import { transferUsdcxTo } from "@/src/lib/deposit";
+import { getCurrentBlockHeight } from "@/src/lib/flowvault";
+import { formatUsdcx } from "@/src/lib/units";
 import { eqAddr, includesAddr } from "@/src/lib/address";
-import { NextStep, type Role } from "@/src/components/NextStep";
-import { ExplorerLink } from "@/src/components/ExplorerLink";
 
 const DETAIL_TOUR: TourStep[] = [
-  { selector: "#tour-timeline", title: "The lifecycle", body: "Tracks the grant from created → funded → locked → judged → settled. The deadline shows the exact date and time. Each step logs its on-chain transaction." },
-  { selector: "#tour-custodian", title: "Live vault balance", body: "The escrow custodian's real FlowVault balance, read live from the contract. 'Locked' funds can't be withdrawn until the deadline." },
-  { selector: "#tour-invest", title: "How backers fund it", body: "Backers send USDCx to the custodian here — into escrow, not to the builder. Each contribution is tracked with its real transfer transaction." },
-  { selector: "#tour-judgepanel", title: "Independent judges", body: "Backers (not the builder) appoint judges who attest whether the milestone was met. 2-of-N agreement is required — this is what protects backers." },
-  { selector: "#tour-lock", title: "① Lock funds in escrow", body: "Once funding hits the minimum and judges are appointed, this locks the raised USDCx in FlowVault until the deadline. Nobody can pull it out early." },
-  { selector: "#tour-release", title: "② Disburse grant — milestone met", body: "Only clickable after 2-of-N judges sign MET. Disburses the grant: 80% to the builder, 20% returned to backers — all on-chain." },
-  { selector: "#tour-refund", title: "② Refund backers — not met", body: "If the judges say the milestone was not met, this refunds 100% of the pool pro-rata to backers." },
-  { selector: "#tour-timeout", title: "⏱ Timeout refund", body: "The safety rule: if the deadline passes without 2-of-N judges reaching MET, the grant is cancelled and backers are refunded 100%. This only appears once the deadline has passed with no consensus." },
+  { selector: "#tour-state", title: "Current state", body: "This program's live status. The one action available to you (given your role and the state) appears right below it — nothing else." },
+  { selector: "#tour-milestones", title: "Milestone checklist", body: "Once awarded, each tranche shows its deadline, share, and state. The active milestone is highlighted; its tranche auto-pays the builder when judges attest it MET before the deadline." },
 ];
-import { request, connect, getLocalStorage } from "@stacks/connect";
-import { Cl } from "@stacks/transactions";
-import {
-  FLOWVAULT_TOKEN_CONTRACT_ADDRESS,
-  FLOWVAULT_TOKEN_CONTRACT_NAME,
-  FLOWVAULT_CONTRACT_ADDRESS,
-  FLOWVAULT_CONTRACT_NAME,
-  FLOWVAULT_NETWORK,
-  getExplorerTxUrl
-} from "@/src/lib/flowvault";
 
-interface Project {
-  id: string;
-  title: string;
-  description: string;
-  fundingGoal: string;
-  milestoneDescription: string;
-  deadlineBlock: number;
-  deadlineAt?: string | null;
-  status: string;
-  builderAddress: string;
-  treasuryAddress: string;
-  minFundingBps?: number;
-  builderAcceptedPartial?: boolean;
-  pooledTxid?: string;
-  pooledExplorerUrl?: string;
-  withdrawTxid?: string;
-  withdrawExplorerUrl?: string;
-}
+const BLOCKS_PER_HOUR = 144;
 
-interface Contribution {
-  id: string;
-  principal: string;
-  amount: string;
-  status?: string;
-  depositTxid?: string;
-  depositExplorerUrl?: string;
-}
-
-interface Attestation {
-  judge: string;
-  vote: string;
-}
-
-export default function ProjectDetail() {
-  const params = useParams<{ id: string }>();
-  const [project, setProject] = useState<Project | null>(null);
-  const [contributions, setContributions] = useState<Contribution[]>([]);
-  const [attestations, setAttestations] = useState<Attestation[]>([]);
-  const [vaultState, setVaultState] = useState<any>(null);
-  const [custodianAddress, setCustodianAddress] = useState<string>("");
-  const [backAmount, setBackAmount] = useState("1000");
-  const [isBacking, setIsBacking] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  const [copiedCustodian, setCopiedCustodian] = useState(false);
-
-  const [connectedAddr, setConnectedAddr] = useState<string | null>(null);
-  const [isAttesting, setIsAttesting] = useState(false);
-  const [pageUrl, setPageUrl] = useState("");
-  const [linkCopied, setLinkCopied] = useState(false);
-  const [judgeInput, setJudgeInput] = useState("");
-  const [isAppointing, setIsAppointing] = useState(false);
-
-  const projectId = params.id;
-
-  // Judges are invited per-project by the builder (independent verifiers). Funds
-  // release only when 2-of-N attest MET, so backers don't have to trust the builder.
-  const invitedJudges: string[] = (() => {
-    try {
-      return JSON.parse((project as any)?.judges || "[]");
-    } catch {
-      return [];
-    }
-  })();
-  // Funding math — only ACTIVE (non-withdrawn) deposits count.
-  const activeContribs = contributions.filter((c) => c.status !== "WITHDRAWN");
-  const totalRaised = activeContribs.reduce((s, c) => s + BigInt(c.amount), BigInt(0));
-  const goal = project ? BigInt(project.fundingGoal) : BigInt(0);
-  const progress = goal > BigInt(0) ? Math.min(Number((totalRaised * BigInt(100)) / goal), 100) : 0;
-  const minBps = project?.minFundingBps ?? 10000;
-  const minRequired = goal > BigInt(0) ? (goal * BigInt(minBps)) / BigInt(10000) : BigInt(0);
-  const metMin = totalRaised >= minRequired || !!project?.builderAcceptedPartial;
-
-  const youAreJudge = includesAddr(invitedJudges, connectedAddr);
-  const youAreBacker = !!connectedAddr && activeContribs.some((c) => eqAddr(c.principal, connectedAddr));
-  const youAreBuilder = eqAddr(connectedAddr, project?.builderAddress);
-  const preLock = ["CREATED", "BACKING_OPEN"].includes(project?.status || "");
-  const canAppointJudges = youAreBacker && preLock;
-
-  const threshold = Math.min(2, invitedJudges.length || 2);
-  const metCount = attestations.filter((a) => a.vote === "MET" && includesAddr(invitedJudges, a.judge)).length;
-  const myContribMicro = activeContribs
-    .filter((c) => eqAddr(c.principal, connectedAddr))
-    .reduce((s, c) => s + BigInt(c.amount), BigInt(0))
-    .toString();
-  const stepRole: Role = youAreBuilder ? "builder" : "backer";
-
-  // Live on-chain escrow state (custodian's FlowVault vault, principal-scoped).
-  const lockedMicro = Number(vaultState?.lockedBalance ?? 0);
-  const unlockedMicro = Number(vaultState?.unlockedBalance ?? 0);
-  const totalOnChain = Number(vaultState?.totalBalance ?? lockedMicro + unlockedMicro);
-  const lockUntilBlock = Number(vaultState?.lockUntilBlock ?? 0);
-  const currentBlock = Number(vaultState?.currentBlock ?? 0);
-  const isLockedOnChain = lockedMicro > 0 && lockUntilBlock > currentBlock;
-  const blocksLeft = Math.max(0, lockUntilBlock - currentBlock);
-  const estUnlockDate = blocksLeft > 0 ? new Date(Date.now() + (blocksLeft / 144) * 3600 * 1000) : null;
-  const isPooled = ["POOLED_LOCKED", "DISPUTE_WINDOW"].includes(project?.status || "");
-  // Drift: what the app expects pooled vs what's actually in the vault right now.
-  const expectedPooledMicro = isPooled ? Number(totalRaised) : null;
-  const hasDrift = expectedPooledMicro != null && vaultState != null && totalOnChain !== expectedPooledMicro;
-
-  useEffect(() => {
-    if (hasDrift) {
-      // eslint-disable-next-line no-console
-      console.warn(`[escrow drift] covenant ${projectId}: DB expects ${expectedPooledMicro} micro pooled, on-chain vault holds ${totalOnChain} micro (locked ${lockedMicro}, unlocked ${unlockedMicro}).`);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasDrift, totalOnChain, expectedPooledMicro]);
-
-  const deadlinePassed = project?.deadlineAt ? new Date(project.deadlineAt).getTime() <= Date.now() : false;
-  const noConsensus = metCount < threshold;
-  const canTimeoutRefund = deadlinePassed && noConsensus && ["BACKING_OPEN", "POOLED_LOCKED", "DISPUTE_WINDOW"].includes(project?.status || "");
-
-  async function handleAppointJudges(addresses: string[]) {
-    if (!connectedAddr) { toast.error("Connect your wallet."); return; }
-    const clean = addresses.map((a) => a.trim()).filter(Boolean);
-    if (clean.length === 0) { toast.error("Enter a judge address."); return; }
-    setIsAppointing(true);
-    try {
-      const res = await fetch(`/api/projects/${projectId}/judges`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ backer: connectedAddr, judges: clean }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to appoint judges");
-      toast.success("Judge(s) appointed.");
-      setJudgeInput("");
-      await loadProject();
-    } catch (e: any) {
-      toast.error(e.message);
-    } finally {
-      setIsAppointing(false);
-    }
-  }
-
-  async function handleWithdraw() {
-    if (!connectedAddr) { toast.error("Connect your wallet."); return; }
-    setIsAppointing(true);
-    try {
-      const res = await fetch(`/api/projects/${projectId}/withdraw-contribution`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ backer: connectedAddr }),
-      });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error || "Withdrawal failed");
-      toast.success("Deposit refunded to your wallet.");
-      if (d.explorerUrl) window.open(d.explorerUrl, "_blank");
-      await loadProject();
-    } catch (e: any) { toast.error(e.message); } finally { setIsAppointing(false); }
-  }
-
-  async function handleAcceptPartial() {
-    if (!connectedAddr) { toast.error("Connect your wallet."); return; }
-    setIsAppointing(true);
-    try {
-      const res = await fetch(`/api/projects/${projectId}/accept-partial`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ builder: connectedAddr }),
-      });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error || "Failed");
-      toast.success("Accepted the partial raise — you can now lock funds.");
-      await loadProject();
-    } catch (e: any) { toast.error(e.message); } finally { setIsAppointing(false); }
-  }
-
-  // Pick up the connected wallet + this page's shareable URL (the judge invite link).
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    setConnectedAddr(localStorage.getItem("covenant-address"));
-    setPageUrl(window.location.href);
-  }, []);
-
-  function copyInviteLink() {
-    const url = pageUrl || (typeof window !== "undefined" ? window.location.href : "");
-    navigator.clipboard?.writeText(url);
-    setLinkCopied(true);
-    toast.success("Invite link copied — send it to your judges");
-    setTimeout(() => setLinkCopied(false), 1500);
-  }
-
-
-  async function loadProject() {
-    try {
-      const res = await fetch(`/api/projects/${projectId}`);
-      if (!res.ok) throw new Error("Project not found");
-      const data = await res.json();
-      setProject(data.project);
-      setContributions(data.contributions || []);
-      setAttestations(data.attestations || []);
-    } catch (e: any) {
-      toast.error("Failed to load project");
-    }
-  }
-
-  async function loadCustodian() {
-    const res = await fetch("/api/escrow/address");
-    const data = await res.json();
-    setCustodianAddress(data.address || "ST...");
-  }
-
-  const copyCustodian = async () => {
-    if (!custodianAddress) return;
-    await navigator.clipboard.writeText(custodianAddress);
-    setCopiedCustodian(true);
-    setTimeout(() => setCopiedCustodian(false), 1600);
+function statusBadge(status: string) {
+  const map: Record<string, string> = {
+    COMPLETED: "stamp-resolved", EXPIRED: "stamp-refunded", AWARDED: "stamp-locked",
+    FUNDED_OPEN: "stamp-open border-2", DRAFT: "stamp-open border-2 opacity-60",
   };
+  return <span className={`${map[status] || "stamp-open"} px-3 py-1 text-[11px] font-bold rounded-sm`}>{status.replace("_", " ")}</span>;
+}
 
-  async function pollVaultState() {
-    try {
-      const res = await fetch(`/api/vault/state?projectId=${projectId}`);
-      const data = await res.json();
-      setVaultState(data);
-    } catch {}
-  }
+interface MilestoneRow { name: string; percent: string; deadlineDate: string }
+
+export default function ProgramDetail() {
+  const { id } = useParams<{ id: string }>();
+  const [program, setProgram] = useState<any>(null);
+  const [currentBlock, setCurrentBlock] = useState(0);
+  const [connectedAddr, setConnectedAddr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [custodian, setCustodian] = useState<{ address: string; balance: string; funded: boolean } | null>(null);
+
+  // builder application form
+  const [pitch, setPitch] = useState("");
+  const [contact, setContact] = useState("");
+
+  // grantor award form
+  const [awardOpenFor, setAwardOpenFor] = useState<string | null>(null);
+  const [judgesText, setJudgesText] = useState("");
+  const [rows, setRows] = useState<MilestoneRow[]>([{ name: "", percent: "", deadlineDate: "" }]);
+
+  const load = useCallback(async () => {
+    const res = await fetch(`/api/programs/${id}`, { cache: "no-store" });
+    if (!res.ok) { toast.error("Program not found"); return; }
+    const data = await res.json();
+    setProgram(data);
+    if (data.currentBlock) setCurrentBlock(data.currentBlock);
+  }, [id]);
 
   useEffect(() => {
-    if (!projectId) return;
-    setLoading(true);
-    Promise.all([loadProject(), loadCustodian(), pollVaultState()]).finally(() => setLoading(false));
+    if (typeof window !== "undefined") setConnectedAddr(localStorage.getItem("covenant-address"));
+    load();
+  }, [load]);
 
-    // Poll vault state
-    const interval = setInterval(pollVaultState, 8000);
-    return () => clearInterval(interval);
-  }, [projectId]);
+  const isGrantor = program && eqAddr(connectedAddr, program.grantorAddress);
 
-  // Status timeline. Both resolved outcomes map to the final step; the last label
-  // reflects the actual outcome. Every backend status maps to exactly one index.
-  const resolvedFail = project?.status === "RESOLVED_FAILURE";
-  const resolvedOk = project?.status === "RESOLVED_SUCCESS";
-  const timelineSteps = [
-    { label: "Created", statuses: ["CREATED"] },
-    { label: "Backing Open", statuses: ["BACKING_OPEN"] },
-    { label: "Locked in Escrow", statuses: ["POOLED_LOCKED"] },
-    { label: "Judging / Dispute Window", statuses: ["DISPUTE_WINDOW"] },
-    { label: resolvedFail ? "Resolved — Refunded" : "Resolved — Released", statuses: ["RESOLVED_SUCCESS", "RESOLVED_FAILURE"] },
-  ];
-  const foundIdx = timelineSteps.findIndex((s) => s.statuses.includes(project?.status || ""));
-  const currentStatusIdx = foundIdx < 0 ? 0 : foundIdx;
-
-  // Helper to connect wallet and get STX address
-  async function ensureWalletAddress(): Promise<string> {
-    try {
-      // Try to use existing session if available via request
-      const res = await request("stx_getAddresses" as any, {});
-      // @stacks/connect types vary; try common shapes
-      const addr = (res as any)?.addresses?.[0]?.address || (res as any)?.stxAddress || (res as any)?.result?.[0]?.address;
-      if (addr && addr.startsWith("ST")) return addr;
-    } catch (_) {}
-
-    // Fallback: open the wallet with @stacks/connect v8 connect()
-    await connect();
-    const stx = getLocalStorage()?.addresses?.stx?.[0]?.address;
-    if (stx && stx.startsWith("ST")) return stx;
-    throw new Error("Wallet address required — set your wallet to Testnet and reconnect.");
-  }
-
-  // Perform real SIP-010 USDCx transfer from user's wallet to custodian
-  async function performUsdcxTransfer(amountMicro: string, custodian: string, sender: string) {
-    const contract = `${FLOWVAULT_TOKEN_CONTRACT_ADDRESS}.${FLOWVAULT_TOKEN_CONTRACT_NAME}`;
-
-    const functionArgs = [
-      Cl.uint(BigInt(amountMicro)),
-      Cl.principal(sender),
-      Cl.principal(custodian),
-      Cl.none(),
-    ];
-
-    const txOptions: any = {
-      contract,
-      functionName: "transfer",
-      functionArgs,
-      network: FLOWVAULT_NETWORK,
-      postConditionMode: "allow", // allow for demo; in prod use exact post conditions
+  // Poll custodian balance while a DRAFT program is being funded by its grantor.
+  useEffect(() => {
+    if (!program || program.status !== "DRAFT" || !isGrantor) return;
+    let stop = false;
+    const poll = async () => {
+      const r = await fetch(`/api/programs/${id}/custodian`, { cache: "no-store" });
+      if (r.ok && !stop) setCustodian(await r.json());
     };
+    poll();
+    const t = setInterval(poll, 12000);
+    return () => { stop = true; clearInterval(t); };
+  }, [program, isGrantor, id]);
 
-    const result = await request("stx_callContract", txOptions);
-
-    const txid = (result as any)?.txid || (result as any)?.transactionId || (result as any)?.txId || "";
-    if (!txid) throw new Error("Transfer submitted but no txid returned");
-
-    const explorerUrl = getExplorerTxUrl(txid);
-    return { txid, explorerUrl };
+  if (!program) {
+    return <div className="min-h-screen flex flex-col"><Nav /><main className="flex-grow max-w-3xl mx-auto w-full px-6 py-24 text-center text-[var(--on-surface-variant)]">Loading program…</main></div>;
   }
 
-  // Back the project with REAL on-chain USDCx transfer
-  async function handleBackProject() {
-    if (!project || !custodianAddress) return;
+  const award = program.award;
+  const myApplication = (program.applications || []).find((a: any) => eqAddr(a.builderAddress, connectedAddr));
+  const isAwardedBuilder = award && eqAddr(award.builderAddress, connectedAddr);
+  let judges: string[] = [];
+  try { judges = JSON.parse(award?.judges || "[]"); } catch { judges = []; }
+  const isJudge = includesAddr(judges, connectedAddr);
+  const activeMs = award?.milestones?.find((m: any) => m.index === award.activeMilestoneIndex);
 
-    const amountMicro = toMicro(backAmount);
-    if (!amountMicro || parseFloat(backAmount) <= 0) {
-      toast.error("Enter a valid amount");
-      return;
-    }
-
-    setIsBacking(true);
+  // ---- actions ----
+  async function fundEscrow() {
+    setBusy(true);
     try {
-      // 1. Ensure we have the user's real STX principal
-      // Prefer connected wallet from localStorage (set by Nav)
-      const saved = typeof window !== 'undefined' ? localStorage.getItem('covenant-address') : null;
-      const sender = saved && saved.startsWith('ST') ? saved : await ensureWalletAddress();
-      toast.info(`Using wallet: ${sender.slice(0, 8)}...`);
+      const address = custodian?.address || program.custodianAddress;
+      const { explorerUrl } = await transferUsdcxTo(address, program.totalPool);
+      toast.success("Pool sent to escrow. Waiting for on-chain confirmation…");
+      window.open(explorerUrl, "_blank");
+    } catch (e: any) { toast.error(e.message || "Transfer failed"); }
+    finally { setBusy(false); }
+  }
 
-      // 2. Execute the actual SIP-010 transfer (this is the on-chain user tx)
-      const transferResult = await performUsdcxTransfer(amountMicro, custodianAddress, sender);
-      toast.success(`Transfer sent! TX: ${transferResult.txid.slice(0, 10)}...`);
-
-      // 3. Record in our DB with the real tx details
-      const recordRes = await fetch(`/api/projects/${projectId}/back`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          amount: amountMicro,
-          principal: sender,
-          depositTxid: transferResult.txid,
-          depositExplorerUrl: transferResult.explorerUrl,
-        }),
+  async function publish() {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/programs/${id}/fund`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ grantorAddress: connectedAddr, fundTxid: program.fundTxid || undefined }),
       });
-
-      if (!recordRes.ok) {
-        const err = await recordRes.json().catch(() => ({}));
-        throw new Error(err.error || "Failed to record contribution after transfer");
-      }
-
-      toast.success("Contribution recorded. View the tx on the explorer.");
-
-      // Open the user's transfer tx
-      window.open(transferResult.explorerUrl, "_blank");
-
-      await loadProject();
-    } catch (err: any) {
-      toast.error(err.message || "Backing failed. Make sure your wallet has USDCx on testnet and you are connected.");
-      console.error(err);
-    } finally {
-      setIsBacking(false);
-    }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Funding not verified yet");
+      toast.success("Escrow verified — program published.");
+      await load();
+    } catch (e: any) { toast.error(e.message); }
+    finally { setBusy(false); }
   }
 
-  async function handleJudgeAttest(vote: "MET" | "NOT_MET") {
-    if (!connectedAddr) {
-      toast.error("Connect your wallet to attest.");
-      return;
-    }
-    if (!youAreJudge) {
-      toast.error("Your connected wallet isn't an invited judge for this covenant.");
-      return;
-    }
-    const judge = connectedAddr;
-    setIsAttesting(true);
+  async function apply() {
+    if (!connectedAddr) return toast.error("Connect your wallet to apply.");
+    if (!pitch.trim()) return toast.error("Write a short pitch.");
+    setBusy(true);
     try {
-      // The judge signs the exact vote with their wallet; the server verifies the
-      // signature against their address before recording it (trustless attestation).
-      const message = `Covenant ${projectId} milestone: ${vote}`;
+      const res = await fetch(`/api/programs/${id}/apply`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ builderAddress: connectedAddr, pitch, contact }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      toast.success("Application submitted.");
+      setPitch(""); setContact(""); await load();
+    } catch (e: any) { toast.error(e.message); }
+    finally { setBusy(false); }
+  }
+
+  async function submitAward(applicationId: string) {
+    setBusy(true);
+    try {
+      const judgeList = judgesText.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean);
+      if (judgeList.length === 0) throw new Error("Add at least one judge address.");
+      const current = await getCurrentBlockHeight();
+      const milestones = rows.map((r) => {
+        if (!r.name || !r.percent || !r.deadlineDate) throw new Error("Every milestone needs a name, %, and deadline.");
+        const hours = Math.max(1, (new Date(r.deadlineDate).getTime() - Date.now()) / 3.6e6);
+        return {
+          name: r.name,
+          percentBps: Math.round(Number(r.percent) * 100),
+          deadlineBlock: Math.floor(current + hours * BLOCKS_PER_HOUR),
+          deadlineAt: new Date(r.deadlineDate).toISOString(),
+        };
+      });
+      const res = await fetch(`/api/programs/${id}/accept`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ grantorAddress: connectedAddr, applicationId, judges: judgeList, milestones }),
+      });
+      const data = await res.json();
+      if (!res.ok && !data.ok) throw new Error(data.error);
+      toast.success(data.partial ? "Awarded — finalizing on-chain lock…" : "Awarded and pool locked. Milestones are live.");
+      setAwardOpenFor(null); await load();
+    } catch (e: any) { toast.error(e.message); }
+    finally { setBusy(false); }
+  }
+
+  async function markReady() {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/programs/${id}/milestones/${award.activeMilestoneIndex}/ready`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ builderAddress: connectedAddr }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      toast.success("Marked ready for review.");
+      await load();
+    } catch (e: any) { toast.error(e.message); }
+    finally { setBusy(false); }
+  }
+
+  async function attest(vote: "MET" | "NOT_MET") {
+    setBusy(true);
+    try {
+      const idx = award.activeMilestoneIndex;
+      const message = `Covenant ${id} milestone ${idx}: ${vote}`;
       const signed: any = await request("stx_signMessage", { message });
       const signature = signed?.signature || signed?.result?.signature;
       const publicKey = signed?.publicKey || signed?.result?.publicKey;
       if (!signature || !publicKey) throw new Error("Wallet did not return a signature.");
-
-      const res = await fetch(`/api/projects/${projectId}/attest`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ judge, vote, signature, publicKey }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || "Attestation failed");
-      }
-      const data = await res.json().catch(() => ({}));
-      toast.success(`Vote signed & verified: "${vote}". ${data.metCount ?? 0} of ${data.totalJudges ?? "?"} say MET.`);
-      await loadProject();
-    } catch (e: any) {
-      if (/reject|cancel|deny/i.test(e?.message || "")) toast.error("Signature cancelled.");
-      else toast.error(e.message);
-    } finally {
-      setIsAttesting(false);
-    }
-  }
-
-  // Resolution trigger (custodian action). `timeout` = deadline passed, no consensus.
-  async function handleResolve(success: boolean, timeout = false) {
-    try {
-      const res = await fetch(`/api/projects/${projectId}/resolve`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ success, timeout }),
+      const res = await fetch(`/api/programs/${id}/milestones/${idx}/attest`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ judge: connectedAddr, vote, signature, publicKey }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      toast.success(`Resolution recorded. ${data.txids ? "On-chain txs logged." : ""}`);
-      await loadProject();
-      await pollVaultState();
-    } catch (e: any) {
-      toast.error(e.message);
+      toast.success(`Attested ${vote}. (${data.metCount}/${data.threshold} MET) — payout auto-releases at the deadline.`);
+      await load();
+    } catch (e: any) { toast.error(e.message); }
+    finally { setBusy(false); }
+  }
+
+  async function sync() {
+    setBusy(true);
+    try {
+      await fetch(`/api/programs/${id}/sync`, { method: "POST" });
+      await load();
+      toast.success("Refreshed on-chain state.");
+    } catch { /* ignore */ }
+    finally { setBusy(false); }
+  }
+
+  // ---- the single available action for the current viewer + state ----
+  function ActionPanel() {
+    // DRAFT: only the grantor (program isn't publicly listed).
+    if (program.status === "DRAFT") {
+      if (!isGrantor) return <Info>This program hasn&rsquo;t been funded yet and isn&rsquo;t public.</Info>;
+      const funded = custodian?.funded;
+      return (
+        <div className="space-y-3">
+          <p className="text-sm text-[var(--on-surface-variant)]">
+            Send the full pool of <strong className="text-[var(--ink)]">{formatUsdcx(program.totalPool)} USDCx</strong> to this program&rsquo;s escrow custodian, then publish.
+          </p>
+          <div className="font-data-sm text-xs break-all bg-[var(--surface-container-low)] border border-[var(--ink)]/10 rounded-sm p-3">
+            {custodian?.address || program.custodianAddress}
+            <div className="mt-1 text-[var(--on-surface-variant)]">In escrow: {formatUsdcx(custodian?.balance || "0")} / {formatUsdcx(program.totalPool)} USDCx {funded ? "✓" : ""}</div>
+          </div>
+          {!funded ? (
+            <button disabled={busy} onClick={fundEscrow} className="btn-primary w-full disabled:opacity-50">{busy ? "SENDING…" : "SEND POOL TO ESCROW"}</button>
+          ) : (
+            <button disabled={busy} onClick={publish} className="btn-primary w-full disabled:opacity-50">{busy ? "PUBLISHING…" : "PUBLISH PROGRAM"}</button>
+          )}
+        </div>
+      );
     }
+
+    // FUNDED_OPEN: grantor reviews applications & awards; builders apply.
+    if (program.status === "FUNDED_OPEN") {
+      if (isGrantor) {
+        const apps = program.applications || [];
+        if (apps.length === 0) return <Info>Program is live. Waiting for builders to apply.</Info>;
+        return (
+          <div className="space-y-4">
+            <p className="text-sm text-[var(--on-surface-variant)]">Accept one builder and define their milestone schedule.</p>
+            {apps.map((a: any) => (
+              <div key={a.id} className="border border-[var(--ink)]/10 rounded-sm p-4">
+                <div className="font-data-sm text-xs text-[var(--on-surface-variant)] break-all mb-1">{a.builderAddress}</div>
+                <p className="text-sm mb-2">{a.pitch}</p>
+                {a.contact ? <p className="text-xs text-[var(--on-surface-variant)] mb-2">Contact: {a.contact}</p> : null}
+                {awardOpenFor === a.id ? (
+                  <AwardForm onCancel={() => setAwardOpenFor(null)} onSubmit={() => submitAward(a.id)} />
+                ) : (
+                  <button disabled={busy} onClick={() => setAwardOpenFor(a.id)} className="btn-secondary text-xs">AWARD TO THIS BUILDER →</button>
+                )}
+              </div>
+            ))}
+          </div>
+        );
+      }
+      if (myApplication) return <Info>Your application is <strong className="text-[var(--ink)]">{myApplication.status}</strong>. The grantor will award one builder.</Info>;
+      return (
+        <div className="space-y-3">
+          <p className="text-sm text-[var(--on-surface-variant)]">Apply to build this grant. If awarded, you&rsquo;ll deliver against a milestone schedule.</p>
+          <textarea value={pitch} onChange={(e) => setPitch(e.target.value)} className="input-line w-full px-4 py-3 text-sm resize-y min-h-[80px]" placeholder="Your pitch: what you'll build, your track record…" />
+          <input value={contact} onChange={(e) => setContact(e.target.value)} className="input-line w-full px-4 py-2 text-sm" placeholder="Contact (optional): email / Discord / X" />
+          <button disabled={busy} onClick={apply} className="btn-primary w-full disabled:opacity-50">{busy ? "SUBMITTING…" : "APPLY TO BUILD"}</button>
+        </div>
+      );
+    }
+
+    // AWARDED: milestone machine drives payouts automatically.
+    if (program.status === "AWARDED") {
+      if (isAwardedBuilder && activeMs) {
+        if (activeMs.status === "LOCKED") {
+          return <div className="space-y-2"><p className="text-sm text-[var(--on-surface-variant)]">You&rsquo;re building milestone <strong className="text-[var(--ink)]">M{activeMs.index + 1}: {activeMs.name}</strong>. When it&rsquo;s done, tell the judges.</p>
+            <button disabled={busy} onClick={markReady} className="btn-primary w-full disabled:opacity-50">{busy ? "…" : "MARK MILESTONE READY FOR REVIEW"}</button></div>;
+        }
+        return <Info>Milestone <strong className="text-[var(--ink)]">M{activeMs.index + 1}</strong> is in review. Its tranche auto-pays to you when judges attest MET before the deadline.</Info>;
+      }
+      if (isJudge && activeMs) {
+        if (activeMs.status === "PAID" || activeMs.status === "EXPIRED") return <Info>Nothing to attest right now.</Info>;
+        return (
+          <div className="space-y-2">
+            <p className="text-sm text-[var(--on-surface-variant)]">Attest milestone <strong className="text-[var(--ink)]">M{activeMs.index + 1}: {activeMs.name}</strong>. Your wallet signs the vote; the tranche releases automatically at the deadline if MET reaches {Math.min(2, judges.length)}-of-{judges.length}.</p>
+            <div className="flex gap-3">
+              <button disabled={busy} onClick={() => attest("MET")} className="btn-primary flex-1 disabled:opacity-50">ATTEST MET</button>
+              <button disabled={busy} onClick={() => attest("NOT_MET")} className="btn-secondary flex-1 disabled:opacity-50">ATTEST NOT MET</button>
+            </div>
+          </div>
+        );
+      }
+      return (
+        <div className="space-y-2">
+          <Info>This grant is live. Milestones disburse automatically at each deadline — no manual release.</Info>
+          <button disabled={busy} onClick={sync} className="text-xs underline text-[var(--on-surface-variant)]">{busy ? "refreshing…" : "refresh on-chain state"}</button>
+        </div>
+      );
+    }
+
+    if (program.status === "COMPLETED") return <Info>✓ All milestones paid. This program is complete.</Info>;
+    if (program.status === "EXPIRED") return <Info>A milestone deadline passed without attestation. Remaining funds were returned to the grantor.</Info>;
+    return null;
   }
 
-  if (loading || !project) {
-    return <div className="min-h-screen flex items-center justify-center">Loading covenant...</div>;
+  function AwardForm({ onCancel, onSubmit }: { onCancel: () => void; onSubmit: () => void }) {
+    const totalPct = rows.reduce((s, r) => s + (Number(r.percent) || 0), 0);
+    return (
+      <div className="mt-3 space-y-3 border-t border-[var(--ink)]/10 pt-3">
+        <div>
+          <label className="block font-label-caps text-[10px] text-[var(--on-surface-variant)] mb-1">JUDGES (one address per line/comma)</label>
+          <textarea value={judgesText} onChange={(e) => setJudgesText(e.target.value)} className="input-line w-full px-3 py-2 text-xs font-data-sm resize-y" rows={2} placeholder="ST... , ST..." />
+        </div>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="font-label-caps text-[10px] text-[var(--on-surface-variant)]">MILESTONES (percentages must sum to 100%)</label>
+            <span className={`text-[10px] font-data-sm ${totalPct === 100 ? "text-[var(--brass)]" : "text-[var(--on-surface-variant)]"}`}>{totalPct}%</span>
+          </div>
+          {rows.map((r, i) => (
+            <div key={i} className="grid grid-cols-12 gap-2">
+              <input value={r.name} onChange={(e) => setRows(rows.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} className="input-line col-span-5 px-2 py-1.5 text-xs" placeholder={`Milestone ${i + 1} name`} />
+              <input type="number" value={r.percent} onChange={(e) => setRows(rows.map((x, j) => j === i ? { ...x, percent: e.target.value } : x))} className="input-line col-span-2 px-2 py-1.5 text-xs" placeholder="%" />
+              <input type="datetime-local" value={r.deadlineDate} onChange={(e) => setRows(rows.map((x, j) => j === i ? { ...x, deadlineDate: e.target.value } : x))} className="input-line col-span-4 px-2 py-1.5 text-xs" />
+              <button type="button" onClick={() => setRows(rows.filter((_, j) => j !== i))} className="col-span-1 text-[var(--on-surface-variant)] hover:text-red-600" disabled={rows.length === 1}>×</button>
+            </div>
+          ))}
+          <button type="button" onClick={() => setRows([...rows, { name: "", percent: "", deadlineDate: "" }])} className="text-xs underline text-[var(--on-surface-variant)]">+ add milestone</button>
+        </div>
+        <div className="flex gap-2 pt-1">
+          <button disabled={busy} onClick={onSubmit} className="btn-primary text-xs flex-1 disabled:opacity-50">{busy ? "AWARDING…" : "CONFIRM AWARD & LOCK POOL"}</button>
+          <button type="button" onClick={onCancel} className="btn-secondary text-xs">CANCEL</button>
+        </div>
+      </div>
+    );
   }
-
 
   return (
     <div className="min-h-screen flex flex-col">
       <Nav />
+      <main className="flex-grow max-w-3xl mx-auto w-full px-6 py-12">
+        <div className="mb-2 font-data-sm text-xs text-[var(--on-surface-variant)]">REF: {String(id).slice(0, 8).toUpperCase()}</div>
+        <div className="flex items-start justify-between gap-4 mb-4">
+          <h1 className="font-display-lg-mobile md:font-display-lg text-3xl">{program.title}</h1>
+          {statusBadge(program.status)}
+        </div>
+        <p className="text-[var(--on-surface-variant)] mb-6">{program.description}</p>
 
-      <main className="flex-grow max-w-[1200px] mx-auto w-full px-6 py-8">
-        <div className="mb-6 flex items-start justify-between">
-          <div>
-            <div className="text-xs font-label-caps text-[var(--on-surface-variant)]">AGREEMENT ID: {project.id.slice(0, 12).toUpperCase()}</div>
-            <h1 className="font-display-lg text-3xl md:text-[32px] tracking-tight">{project.title}</h1>
-            <p className="text-[var(--on-surface-variant)] mt-1 flex items-center gap-1">Builder: <ExplorerLink value={project.builderAddress} kind="address" /></p>
-          </div>
-          <div>
-            <span className={
-              project.status.includes("RESOLVED") ? "stamp-resolved" : 
-              project.status.includes("LOCKED") ? "stamp-locked" : "stamp-open"
-            } style={{ padding: "6px 14px", fontSize: "11px" }}>
-              {project.status.replace("_", " ")}
-            </span>
-          </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8 text-sm">
+          <Stat label="POOL" value={`${formatUsdcx(program.totalPool)} USDCx`} />
+          <Stat label="HORIZON" value={`block ${program.programDeadlineBlock}`} />
+          <Stat label="APPLICANTS" value={award ? "awarded" : String((program.applications || []).length)} />
+          <Stat label="BLOCK" value={currentBlock ? String(currentBlock) : "—"} />
         </div>
 
-        {/* Guided "you are here" stepper — mirrors the settlement gates */}
-        <div className="mb-8 max-w-2xl">
-          <NextStep
-            role={stepRole}
-            id={project.id}
-            status={project.status}
-            raisedMicro={totalRaised.toString()}
-            goalMicro={goal.toString()}
-            minBps={minBps}
-            metMin={metMin}
-            judgeCount={invitedJudges.length}
-            metCount={metCount}
-            threshold={threshold}
-            myContributionMicro={myContribMicro}
-          />
-        </div>
-
-        <div className="rule-line-major mb-8" />
-
-        {/* Bento: Timeline + Vault + Judges */}
-        <div className="grid md:grid-cols-12 gap-6 mb-10">
-          {/* Timeline */}
-          <div id="tour-timeline" className="md:col-span-4 border border-[var(--ink)]/10 p-6 bg-white dark:bg-[#121720] dark:border-white/10">
-            <div className="font-label-caps text-xs text-[var(--on-surface-variant)] mb-4">AGREEMENT TIMELINE</div>
-            <div className="space-y-6 relative pl-5">
-              {timelineSteps.map((step, idx) => (
-                <div key={idx} className="timeline-item flex gap-3">
-                  <div className={`timeline-dot mt-1 ${idx <= currentStatusIdx ? "active" : ""}`} />
-                  <div className="text-sm">
-                    <div className={idx <= currentStatusIdx ? "font-medium" : "text-[var(--on-surface-variant)]"}>{step.label}</div>
-                    <div className="font-data-sm text-xs text-[var(--on-surface-variant)]">
-                      {idx === 1 && (project.deadlineAt || project.deadlineBlock)
-                        ? `Deadline ${formatDeadline(project.deadlineAt, project.deadlineBlock)}`
-                        : idx === 2 && project.pooledTxid
-                        ? <>Lock tx: <ExplorerLink value={project.pooledTxid} kind="tx" /></>
-                        : idx === 4 && project.withdrawTxid
-                        ? <>Settlement tx: <ExplorerLink value={project.withdrawTxid} kind="tx" /></>
-                        : "—"}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Vault + Judges */}
-          <div className="md:col-span-8 flex flex-col gap-6">
-            {/* Escrow status — live on-chain vault state */}
-            <div id="tour-custodian" className="border border-[var(--ink)]/10 p-6 bg-white dark:bg-[#121720] dark:border-white/10">
-              <div className="flex items-center justify-between mb-3">
-                <div className="font-label-caps text-xs text-[var(--on-surface-variant)]">ESCROW STATUS · LIVE ON-CHAIN</div>
-                {vaultState ? (
-                  isLockedOnChain
-                    ? <span className="text-[10px] font-label-caps px-2 py-0.5 rounded bg-[var(--ink)]/15 text-[var(--ink)]">🔒 LOCKED</span>
-                    : <span className="text-[10px] font-label-caps px-2 py-0.5 rounded bg-[#2f7d5b]/20 text-[#2f7d5b]">AVAILABLE</span>
-                ) : <span className="text-[10px] text-[var(--on-surface-variant)]">reading…</span>}
-              </div>
-
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div>
-                  <div className="text-3xl font-data-lg tracking-tight">
-                    {isLockedOnChain ? formatUsdcx(lockedMicro) : formatUsdcx(0)} <span className="text-base">USDCx</span>
-                  </div>
-                  <p className="text-xs text-[var(--on-surface-variant)] mt-1">
-                    🔒 Locked{isLockedOnChain && lockUntilBlock ? <> until block <span className="text-[var(--ink)]">{lockUntilBlock.toLocaleString()}</span>{estUnlockDate ? <> (~{formatDateTime(estUnlockDate)})</> : null}</> : " — nothing locked right now"}
-                  </p>
-                </div>
-                <div>
-                  <div className="text-3xl font-data-lg tracking-tight">{formatUsdcx(unlockedMicro)} <span className="text-base">USDCx</span></div>
-                  <p className="text-xs text-[var(--on-surface-variant)] mt-1">Available to withdraw{unlockedMicro > 0 ? " now" : " yet"}</p>
-                </div>
-              </div>
-
-              {hasDrift && (
-                <p className="mt-3 text-[11px] text-[var(--signet)]">
-                  ⚠ On-chain vault holds {formatUsdcx(totalOnChain)} USDCx, but this covenant expects {formatUsdcx(expectedPooledMicro || 0)} USDCx pooled. (The custodian vault is shared across covenants, so this can differ; logged for debugging.)
-                </p>
-              )}
-
-              <div className="mt-4 border-t border-[var(--ink)]/10 pt-3 grid sm:grid-cols-2 gap-3 text-xs">
-                <div>
-                  <div className="font-label-caps text-[10px] text-[var(--on-surface-variant)] mb-1 flex items-center gap-2">
-                    ESCROW CUSTODIAN
-                    <button onClick={copyCustodian} className="text-[9px] px-1.5 py-px rounded border border-[var(--ink)]/20 hover:bg-[var(--ink)]/5" title="Copy address">{copiedCustodian ? 'COPIED!' : 'COPY'}</button>
-                  </div>
-                  {custodianAddress ? <ExplorerLink value={custodianAddress} kind="address" /> : <span className="text-[var(--on-surface-variant)]">—</span>}
-                </div>
-                <div>
-                  <div className="font-label-caps text-[10px] text-[var(--on-surface-variant)] mb-1">FLOWVAULT CONTRACT</div>
-                  <ExplorerLink value={`${FLOWVAULT_CONTRACT_ADDRESS}.${FLOWVAULT_CONTRACT_NAME}`} kind="contract" label={`${FLOWVAULT_CONTRACT_NAME}`} />
-                </div>
-              </div>
-            </div>
-
-            {/* Judge Attestation Panel — invited independent verifiers */}
-            <div id="tour-judgepanel" className="border border-[var(--ink)]/10 p-6 bg-white dark:bg-[#121720] dark:border-white/10">
-              {(() => {
-                return (
-                  <>
-                    <div className="flex justify-between mb-1">
-                      <div className="font-label-caps text-xs text-[var(--on-surface-variant)]">MILESTONE ATTESTATION ({threshold}-of-{invitedJudges.length || "—"})</div>
-                      <div className="text-xs px-2 py-0.5 bg-[var(--surface-container-low)] text-[var(--ink)]">{metCount} MET</div>
-                    </div>
-                    <p className="text-[11px] text-[var(--on-surface-variant)] mb-4">
-                      Judges are appointed by <strong className="text-[var(--ink)]">backers</strong> (not the builder). Funds only release when <strong className="text-[var(--ink)]">{threshold} of {invitedJudges.length || "N"}</strong> attest MET.
-                    </p>
-
-                    {/* Backers appoint judges (only backers, only before lock) */}
-                    {canAppointJudges && (
-                      <div className="mb-4 border border-[var(--ink)]/15 rounded-sm p-3 bg-[var(--surface-container-low)]">
-                        <div className="font-label-caps text-[10px] text-[var(--on-surface-variant)] mb-1.5">APPOINT A JUDGE (BACKERS ONLY)</div>
-                        <div className="flex items-center gap-2">
-                          <input
-                            value={judgeInput}
-                            onChange={(e) => setJudgeInput(e.target.value)}
-                            placeholder="ST… judge address"
-                            className="flex-1 min-w-0 bg-transparent border border-[var(--ink)]/15 rounded px-2 py-1.5 text-xs font-data-sm"
-                          />
-                          <button type="button" disabled={isAppointing} onClick={() => handleAppointJudges([judgeInput])} className="btn-primary text-[10px] px-3 py-1.5 shrink-0 disabled:opacity-50">ADD</button>
-                        </div>
-                        <button type="button" disabled={isAppointing || youAreJudge} onClick={() => handleAppointJudges([connectedAddr as string])} className="mt-2 text-[10px] underline text-[var(--on-surface-variant)] hover:text-[var(--ink)] disabled:opacity-40">
-                          + Add myself as a judge
-                        </button>
-                      </div>
-                    )}
-
-                    {invitedJudges.length === 0 ? (
-                      <div className="text-sm text-[var(--on-surface-variant)] border border-dashed border-[var(--ink)]/20 rounded p-4">
-                        {youAreBacker
-                          ? "No judges appointed yet — add the judges who will verify this milestone above."
-                          : "No judges appointed yet. After you fund this grant, you can appoint the judges who verify this milestone."}
-                      </div>
-                    ) : (
-                      <>
-                        <div className="space-y-1 text-sm mb-5">
-                          {invitedJudges.map((j, i) => {
-                            const att = attestations.find(a => eqAddr(a.judge, j));
-                            const isYou = connectedAddr === j;
-                            return (
-                              <div key={i} className="flex justify-between py-2 rule-line-minor items-center text-xs gap-2">
-                                <span className="flex items-center gap-2 min-w-0">
-                                  <span className="font-label-caps text-[10px] text-[var(--on-surface-variant)] shrink-0">JUDGE {i + 1}</span>
-                                  <ExplorerLink value={j} kind="address" />
-                                  {isYou && <span className="text-[9px] px-1.5 py-0.5 rounded bg-[var(--brass)]/20 text-[var(--brass)] font-bold shrink-0">YOU</span>}
-                                </span>
-                                <span className={att ? (att.vote === "MET" ? "text-[var(--brass)] font-medium shrink-0" : "text-[var(--signet)] font-medium shrink-0") : "text-[var(--on-surface-variant)] shrink-0"}>
-                                  {att ? att.vote : "PENDING"}
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-
-                        {/* Judge invite link — always visible so the builder can share it */}
-                        <div className="mb-4 border border-[var(--ink)]/15 rounded-sm p-3 bg-[var(--surface-container-low)]">
-                          <div className="font-label-caps text-[10px] text-[var(--on-surface-variant)] mb-1.5">JUDGE INVITE LINK — SEND THIS TO YOUR JUDGES</div>
-                          <div className="flex items-center gap-2">
-                            <input
-                              readOnly
-                              value={pageUrl}
-                              onFocus={(e) => e.currentTarget.select()}
-                              className="flex-1 min-w-0 bg-transparent border border-[var(--ink)]/15 rounded px-2 py-1.5 text-xs font-data-sm text-[var(--ink)]"
-                            />
-                            <button type="button" onClick={copyInviteLink} className="btn-primary text-[10px] px-3 py-1.5 shrink-0">
-                              {linkCopied ? "COPIED" : "COPY"}
-                            </button>
-                          </div>
-                          <p className="text-[10px] text-[var(--on-surface-variant)] mt-2">
-                            An invited judge opens this link, connects their wallet, and attests. {youAreJudge
-                              ? "You're an invited judge — cast your vote below."
-                              : "Your connected wallet isn't on the judge list."}
-                          </p>
-                        </div>
-
-                        {youAreJudge ? (
-                          <>
-                            <p className="text-[11px] text-[var(--on-surface-variant)] mb-2">
-                              Attesting as <span className="font-data-sm text-[var(--ink)]">{connectedAddr?.slice(0, 10)}…{connectedAddr?.slice(-4)}</span>. Your wallet will sign the vote and the server verifies the signature.
-                            </p>
-                            <div className="flex gap-3">
-                              <button onClick={() => handleJudgeAttest("NOT_MET")} disabled={isAttesting} className="btn-secondary flex-1 text-sm py-2 disabled:opacity-50">{isAttesting ? "SIGNING…" : "ATTEST: NOT MET"}</button>
-                              <button onClick={() => handleJudgeAttest("MET")} disabled={isAttesting} className="btn-primary flex-1 text-sm py-2 disabled:opacity-50">{isAttesting ? "SIGNING…" : "ATTEST: MET"}</button>
-                            </div>
-                          </>
-                        ) : (
-                          <div className="border border-dashed border-[var(--ink)]/20 rounded-sm p-3 text-[11px] text-[var(--on-surface-variant)]">
-                            Only invited judges can attest. Connect one of the invited judge wallets (top-right) to sign a vote.
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </>
-                );
-              })()}
-            </div>
-          </div>
-        </div>
-
-        {/* Back this project section */}
-        {project.status === "CREATED" || project.status === "BACKING_OPEN" ? (
-          <div id="tour-invest" className="border border-[var(--ink)]/10 p-6 mb-8 max-w-lg">
-            <div className="font-label-caps text-xs mb-2">TRANSACTION SETUP</div>
-            <h3 className="font-headline-md mb-4">Fund this grant</h3>
-
-            <div className="mb-4">
-              <div className="text-xs font-label-caps mb-1">SEND USDCx TO CUSTODIAN</div>
-              <div className="font-data-sm break-all bg-[var(--surface-container-low)] p-2 text-sm flex items-center justify-between gap-2">
-                <span className="break-all">{custodianAddress}</span>
-                {custodianAddress && <ExplorerLink value={custodianAddress} kind="address" label="explorer" className="shrink-0" />}
-              </div>
-            </div>
-
-            <label className="text-xs font-label-caps block mb-1">CONTRIBUTION AMOUNT (USDCx)</label>
-            <input
-              type="number"
-              value={backAmount}
-              onChange={(e) => setBackAmount(e.target.value)}
-              className="input-line w-full py-2 mb-4 text-lg font-data-lg"
-            />
-
-            <button onClick={handleBackProject} disabled={isBacking} className="btn-primary w-full disabled:opacity-60">
-              {isBacking ? "RECORDING..." : "RECORD CONTRIBUTION"}
-            </button>
-            <p className="text-[10px] mt-3 text-[var(--on-surface-variant)]">After recording, perform a standard USDCx SIP-010 transfer to the custodian. Paste txid if prompted in future.</p>
+        {program.conditions ? (
+          <div className="mb-8 border border-[var(--ink)]/10 rounded-sm p-4">
+            <div className="font-label-caps text-[10px] text-[var(--on-surface-variant)] mb-1">ELIGIBILITY</div>
+            <p className="text-sm text-[var(--on-surface-variant)]">{program.conditions}</p>
           </div>
         ) : null}
 
-        {/* Backer Ledger */}
-        <div className="border border-[var(--ink)]/10 mb-8 overflow-hidden">
-          <div className="p-4 bg-white dark:bg-[#121720] border-b border-[var(--ink)]/10 dark:border-white/10">
-            <div className="font-label-caps text-xs">BACKER LEDGER • {contributions.length} CONTRIBUTIONS</div>
-          </div>
-          <div className="overflow-x-auto bg-white dark:bg-[#121720]">
-            <table className="w-full text-left data-table">
-              <thead>
-                <tr className="border-b border-[var(--ink)]/10 bg-[var(--surface-container-low)]/40">
-                  <th className="p-3 text-xs">PRINCIPAL</th>
-                  <th className="p-3 text-xs text-right">AMOUNT (USDCx)</th>
-                  <th className="p-3 text-xs text-right">TIMESTAMP</th>
-                  <th className="p-3 text-xs text-center">TX</th>
-                </tr>
-              </thead>
-              <tbody className="text-sm font-data-sm">
-                {contributions.length === 0 && <tr><td colSpan={4} className="p-8 text-center text-[var(--on-surface-variant)]">No backers yet.</td></tr>}
-                {contributions.map((c, idx) => (
-                  <tr key={idx} className="border-b border-[var(--ink)]/10 hover:bg-[var(--parchment)]">
-                    <td className="p-3 text-xs"><ExplorerLink value={c.principal} kind="address" /></td>
-                    <td className="p-3 text-right">{formatUsdcx(c.amount)}{c.status === "WITHDRAWN" && <span className="text-[var(--signet)] text-[10px] ml-1">(withdrawn)</span>}</td>
-                    <td className="p-3 text-right text-[var(--on-surface-variant)] text-xs">{new Date().toISOString().slice(0, 16)}</td>
-                    <td className="p-3 text-center">
-                      {c.depositExplorerUrl ? <a href={c.depositExplorerUrl} target="_blank" className="explorer-link">↗</a> : "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        {/* Current state + the single available action */}
+        <section id="tour-state" className="card-container p-6 mb-8">
+          <div className="font-label-caps text-[10px] text-[var(--on-surface-variant)] mb-3">CURRENT STATE — {program.status.replace("_", " ")}</div>
+          <ActionPanel />
+        </section>
 
-        {/* Funding status + pre-lock actions (backer withdraw / builder accept-partial) */}
-        {preLock && (
-          <div className="border border-[var(--ink)]/10 p-6 mb-8 rounded-sm">
-            <div className="flex justify-between text-xs font-label-caps text-[var(--on-surface-variant)] mb-1.5">
-              <span>FUNDING</span>
-              <span>{formatUsdcx(totalRaised.toString())} / {formatUsdcx(goal.toString())} USDCx · min {(minBps / 100).toFixed(0)}%</span>
+        {/* Milestone checklist */}
+        {award ? (
+          <section id="tour-milestones" className="mb-8">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-headline-md text-xl">Milestones</h2>
+              <span className="font-data-sm text-xs text-[var(--on-surface-variant)] break-all">builder {award.builderAddress.slice(0, 10)}…</span>
             </div>
-            <div className="relative progress-bar w-full">
-              <div className="progress-fill" style={{ width: `${progress}%` }} />
-              <div className="absolute top-[-2px] bottom-[-2px] w-[2px] bg-[var(--signet)]" style={{ left: `${Math.min(100, minBps / 100)}%` }} title="Minimum to proceed" />
+            <MilestoneList milestones={award.milestones} activeIndex={award.activeMilestoneIndex} currentBlock={currentBlock} judgeCount={judges.length} />
+          </section>
+        ) : null}
+
+        {/* Distributions ledger */}
+        {award?.distributions?.length ? (
+          <section className="mb-8">
+            <h2 className="font-headline-md text-xl mb-3">On-chain Distributions</h2>
+            <div className="space-y-2">
+              {award.distributions.map((d: any) => (
+                <a key={d.id} href={d.explorerUrl} target="_blank" rel="noreferrer" className="flex justify-between items-center border border-[var(--ink)]/10 rounded-sm p-3 text-sm hover:bg-[var(--surface-container-low)]">
+                  <span>{d.kind === "MILESTONE_PAYOUT" ? "Milestone payout → builder" : "Return → grantor"}</span>
+                  <span className="font-data-sm">{formatUsdcx(d.amount)} USDCx ↗</span>
+                </a>
+              ))}
             </div>
-            <p className="text-xs mt-2 text-[var(--on-surface-variant)]">
-              {metMin ? "Minimum reached — ready to lock once judges are appointed." : "Below the builder's minimum. Backers may withdraw, or the builder can accept the partial raise."}
-            </p>
-
-            <div className="flex flex-wrap gap-3 mt-3">
-              {youAreBacker && (
-                <button onClick={handleWithdraw} disabled={isAppointing} className="btn-secondary text-xs py-2 px-4 disabled:opacity-50">WITHDRAW MY DEPOSIT</button>
-              )}
-              {youAreBuilder && !metMin && activeContribs.length > 0 && (
-                <button onClick={handleAcceptPartial} disabled={isAppointing} className="btn-primary text-xs py-2 px-4 disabled:opacity-50">ACCEPT PARTIAL &amp; PROCEED</button>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Settlement controls */}
-        <div id="tour-actions" className="border border-[var(--ink)]/10 p-6 bg-white dark:bg-[#121720] dark:border-white/10 mb-8">
-          <div className="font-label-caps text-xs mb-1">SETTLEMENT — after funding &amp; judging</div>
-          <p className="text-xs text-[var(--on-surface-variant)] mb-4">These lock and release the escrowed funds. Each produces a real on-chain transaction.</p>
-
-          {(() => {
-            const poolBlockReason =
-              activeContribs.length === 0
-                ? "No backers have funded this yet."
-                : invitedJudges.length === 0
-                ? "Backers must appoint at least one judge first."
-                : !metMin
-                ? "Funding is below the minimum (builder can accept the partial raise above)."
-                : "";
-            const canRelease = metCount >= threshold;
-            return (
-              <div className="space-y-3">
-                <div>
-                  <button
-                    id="tour-lock"
-                    disabled={!!poolBlockReason}
-                    title={poolBlockReason}
-                    onClick={async () => {
-                      const r = await fetch(`/api/projects/${projectId}/pool`, { method: "POST" });
-                      const d = await r.json();
-                      if (r.ok) { toast.success("Funds locked in escrow"); window.open(d.explorerUrl, "_blank"); }
-                      else toast.error(d.error);
-                      await loadProject();
-                    }}
-                    className="btn-secondary text-sm py-2 w-full sm:w-auto disabled:opacity-40">① LOCK FUNDS IN ESCROW</button>
-                  <p className="text-[11px] text-[var(--on-surface-variant)] mt-1">{poolBlockReason || "Locks the raised USDCx in FlowVault until the deadline (set-routing-rules + deposit)."}</p>
-                </div>
-
-                <div>
-                  <button
-                    id="tour-release"
-                    disabled={!canRelease}
-                    title={canRelease ? "" : "Requires 2-of-N judges to sign MET first."}
-                    onClick={() => handleResolve(true)}
-                    className="btn-primary text-sm py-2 w-full sm:w-auto disabled:opacity-40">② DISBURSE GRANT — milestone met</button>
-                  <p className="text-[11px] text-[var(--on-surface-variant)] mt-1">{canRelease ? "Withdraws from FlowVault and disburses the grant: 80% to the builder, 20% returned to backers." : `Enabled once ${threshold}-of-${invitedJudges.length || "N"} judges sign MET (currently ${metCount}).`}</p>
-                </div>
-
-                <div>
-                  <button
-                    id="tour-refund"
-                    onClick={() => handleResolve(false)}
-                    className="btn-secondary text-sm py-2 w-full sm:w-auto">② REFUND BACKERS — milestone not met</button>
-                  <p className="text-[11px] text-[var(--on-surface-variant)] mt-1">Withdraws from FlowVault and refunds 100% pro-rata to backers.</p>
-                </div>
-
-                {canTimeoutRefund && (
-                  <div>
-                    <button
-                      id="tour-timeout"
-                      onClick={() => handleResolve(false, true)}
-                      className="btn-secondary text-sm py-2 w-full sm:w-auto border-[var(--signet)] text-[var(--signet)]">⏱ REFUND — DEADLINE PASSED, NO CONSENSUS</button>
-                    <p className="text-[11px] text-[var(--on-surface-variant)] mt-1">The deadline passed without {threshold}-of-{invitedJudges.length || "N"} judges reaching MET. Safety rule: the grant is cancelled and backers are refunded 100%.</p>
-                  </div>
-                )}
-              </div>
-            );
-          })()}
-
-          {project.pooledTxid && <div className="text-xs mt-3">Locked tx: <ExplorerLink value={project.pooledTxid} kind="tx" /></div>}
-          {project.withdrawTxid && <div className="text-xs mt-1">Settlement tx: <ExplorerLink value={project.withdrawTxid} kind="tx" /></div>}
-        </div>
-
-        {/* Milestone details */}
-        <div className="text-sm">
-          <div className="font-label-caps text-xs text-[var(--on-surface-variant)]">MILESTONE</div>
-          <div className="mt-1">{project.milestoneDescription}</div>
-        </div>
+          </section>
+        ) : null}
       </main>
-
-      <GuidedTour steps={DETAIL_TOUR} storageKey="covenant-detail-tour-v1" />
+      <GuidedTour steps={DETAIL_TOUR} storageKey={`covenant-detail-tour-${id}-v2`} />
     </div>
   );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="border border-[var(--ink)]/10 rounded-sm p-3">
+      <div className="font-label-caps text-[10px] text-[var(--on-surface-variant)]">{label}</div>
+      <div className="font-data-sm text-[var(--ink)] mt-0.5 break-all">{value}</div>
+    </div>
+  );
+}
+
+function Info({ children }: { children: React.ReactNode }) {
+  return <p className="text-sm text-[var(--on-surface-variant)]">{children}</p>;
 }

@@ -75,6 +75,36 @@ export async function depositUsdcxToCustodian(amountMicro: string): Promise<Depo
   return { txid, explorerUrl: getExplorerTxUrl(txid), sender, custodian };
 }
 
+// Transfer USDCx from the connected wallet to an ARBITRARY recipient address —
+// used by grantors to fund a specific program's escrow custodian (each program
+// has its own custodian, so the universal /api/escrow/address form doesn't apply).
+export async function transferUsdcxTo(recipient: string, amountMicro: string): Promise<DepositResult> {
+  const sender = await getConnectedStxAddress();
+  if (!recipient || !recipient.startsWith("S")) throw new Error("Invalid recipient address.");
+
+  const contract = `${FLOWVAULT_TOKEN_CONTRACT_ADDRESS}.${FLOWVAULT_TOKEN_CONTRACT_NAME}`;
+  const functionArgs = [
+    Cl.uint(BigInt(amountMicro)),
+    Cl.principal(sender),
+    Cl.principal(recipient),
+    Cl.none(),
+  ];
+
+  const params: any = {
+    contract,
+    functionName: "transfer",
+    functionArgs,
+    network: FLOWVAULT_NETWORK,
+    postConditionMode: "allow",
+  };
+  const result: any = await request("stx_callContract", params);
+
+  const txid = result?.txid || result?.txId || result?.transactionId || "";
+  if (!txid) throw new Error("Transfer submitted but no transaction id was returned.");
+
+  return { txid, explorerUrl: getExplorerTxUrl(txid), sender, custodian: recipient };
+}
+
 // Convert a whole-USDCx string/number to micro-units string.
 export function toMicroUsdcx(whole: string | number): string {
   return BigInt(Math.round(Number(whole) * 1_000_000)).toString();

@@ -20,8 +20,8 @@ export default async function ReputationVault() {
           <span className="text-[10px] font-label-caps px-2 py-0.5 rounded bg-[#2f7d5b]/20 text-[#2f7d5b]">LIVE</span>
         </div>
         <p className="text-sm text-[var(--on-surface-variant)] max-w-2xl">
-          Reputation is earned automatically: <strong className="text-[var(--ink)]">+1 for every covenant that resolves successfully</strong> while
-          you were a builder or backer (written on resolution of the live Milestone vault). In a reputation vault, payout
+          Reputation is earned automatically: <strong className="text-[var(--ink)]">+1 for every grant milestone that pays out</strong> to
+          you as a builder (written on resolution of the live grant programs). In a reputation vault, payout
           splits are computed from these scores. The leaderboard below is <strong className="text-[var(--ink)]">live from the database</strong>.
         </p>
 

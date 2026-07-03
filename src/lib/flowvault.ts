@@ -67,9 +67,11 @@ export function mapFlowVaultError(error: unknown): string {
   }
 }
 
-// Create backend signer instance (server only - custodian)
-export function createBackendVault(): FlowVault {
-  const senderKey = process.env.STACKS_PRIVATE_KEY;
+// Create backend signer instance (server only - custodian).
+// Pass `senderKeyOverride` to act as a per-program derived custodian instead of
+// the master custodian (see deriveProgramCustodian in escrow.ts).
+export function createBackendVault(senderKeyOverride?: string): FlowVault {
+  const senderKey = senderKeyOverride || process.env.STACKS_PRIVATE_KEY;
   if (!senderKey) {
     throw new Error("STACKS_PRIVATE_KEY is required for escrow custodian operations (server-side only).");
   }

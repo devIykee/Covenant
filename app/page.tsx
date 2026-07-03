@@ -1,6 +1,6 @@
 import { Nav } from "@/src/components/Nav";
 import Link from "next/link";
-import { db } from "@/src/lib/db";
+import { getDb } from "@/src/lib/db";
 import { GuidedTour, type TourStep } from "@/src/components/GuidedTour";
 import { formatUsdcx } from "@/src/lib/units";
 import { formatDeadline } from "@/src/lib/format";
@@ -8,24 +8,27 @@ import { formatDeadline } from "@/src/lib/format";
 export const dynamic = "force-dynamic";
 
 const HOME_TOUR: TourStep[] = [
-  { selector: "#tour-home-cta", title: "Start here", body: "Browse existing covenants, or create your own — a milestone-gated vault where funds release only when invited judges verify the milestone." },
-  { selector: "#tour-home-active", title: "Live covenants", body: "These are real covenants from the database — click any card to see its timeline, judges, and on-chain vault balance." },
+  { selector: "#tour-home-cta", title: "Start here", body: "Browse open grant programs to apply as a builder, or create your own program — a pool that pays out milestone-by-milestone only when judges verify the work." },
+  { selector: "#tour-home-active", title: "Live programs", body: "These are real grant programs from the database — click any card to see its conditions, pool size, and (once awarded) the builder's milestone schedule." },
   { selector: "#docs", title: "New to all this?", body: "The Docs page walks a total beginner from a blank machine to a real testnet transaction. Every click explained." },
 ];
 
 function statusBadge(status: string) {
-  if (status === "RESOLVED_SUCCESS") return <span className="stamp-resolved font-label-caps text-[11px] px-3 py-1 font-bold rounded-sm border-2">RESOLVED</span>;
-  if (status === "RESOLVED_FAILURE") return <span className="stamp-refunded font-label-caps text-[11px] px-3 py-1 font-bold rounded-sm border-2">REFUNDED</span>;
-  if (status === "POOLED_LOCKED" || status === "DISPUTE_WINDOW") return <span className="stamp-locked font-label-caps text-[11px] px-3 py-1 font-bold rounded-sm">LOCKED</span>;
-  return <span className="stamp-open font-label-caps text-[11px] px-3 py-1 font-bold rounded-sm border-2">OPEN</span>;
+  if (status === "COMPLETED") return <span className="stamp-resolved font-label-caps text-[11px] px-3 py-1 font-bold rounded-sm border-2">COMPLETED</span>;
+  if (status === "EXPIRED") return <span className="stamp-refunded font-label-caps text-[11px] px-3 py-1 font-bold rounded-sm border-2">EXPIRED</span>;
+  if (status === "AWARDED") return <span className="stamp-locked font-label-caps text-[11px] px-3 py-1 font-bold rounded-sm">AWARDED</span>;
+  if (status === "FUNDED_OPEN") return <span className="stamp-open font-label-caps text-[11px] px-3 py-1 font-bold rounded-sm border-2">OPEN</span>;
+  return <span className="stamp-open font-label-caps text-[11px] px-3 py-1 font-bold rounded-sm border-2 opacity-60">DRAFT</span>;
 }
 
 export default async function CovenantHome() {
-  const projects = await db.project.findMany({
+  const db = getDb();
+  const programs = await db.grantProgram.findMany({
+    where: { status: { in: ["FUNDED_OPEN", "AWARDED", "COMPLETED"] } },
     orderBy: { createdAt: "desc" },
     take: 3,
-    include: { contributions: true },
-  }).catch(() => []);
+    include: { applications: true, award: true },
+  }).catch(() => [] as any[]);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -34,19 +37,19 @@ export default async function CovenantHome() {
       <main className="flex-grow w-full max-w-[1200px] mx-auto px-6 py-12 md:py-24">
         {/* Hero */}
         <header className="mb-14 md:mb-20 text-center max-w-3xl mx-auto">
-          <div className="font-label-caps text-xs tracking-[0.12em] text-[var(--brass)] mb-4">MILESTONE-GATED GRANTS · ON STACKS + FLOWVAULT</div>
+          <div className="font-label-caps text-xs tracking-[0.12em] text-[var(--brass)] mb-4">MILESTONE-BASED GRANTS · ON STACKS + FLOWVAULT</div>
           <h1 className="font-display-lg-mobile md:font-display-lg text-[32px] md:text-[48px] leading-[40px] md:leading-[56px] tracking-[-0.02em] text-[var(--ink)] mb-6">
-            Grants that only pay out when the work is verified.
+            Grants that release milestone-by-milestone, only when the work is verified.
           </h1>
           <p className="font-body-lg text-lg md:text-[18px] leading-[28px] text-[var(--on-surface-variant)]">
-            Backers fund a grant into escrow. It&rsquo;s time-locked in FlowVault and only <strong className="text-[var(--ink)]">disbursed to the builder</strong> once independent judges (chosen by backers, not the builder) verify the milestone — otherwise everyone is <strong className="text-[var(--ink)]">refunded</strong>. Conditional money routing, not a deposit form.
+            A <strong className="text-[var(--ink)]">grantor</strong> locks a pool into a dedicated escrow. A <strong className="text-[var(--ink)]">builder</strong> is awarded the grant against a milestone schedule. As independent <strong className="text-[var(--ink)]">judges</strong> attest each milestone met, that tranche is <strong className="text-[var(--ink)]">automatically disbursed</strong> — and any milestone that lapses un-attested returns its funds to the grantor.
           </p>
           <div id="tour-home-cta" className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/projects" className="btn-primary">
-              BROWSE GRANTS
+              BROWSE PROGRAMS
             </Link>
             <Link href="/projects/create" className="btn-secondary">
-              CREATE A GRANT
+              CREATE A PROGRAM
             </Link>
           </div>
         </header>
@@ -54,9 +57,9 @@ export default async function CovenantHome() {
         {/* How it works — makes the conditional-routing logic visible before any deposit UI */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-16 max-w-4xl mx-auto">
           {[
-            { n: "01", t: "Fund into escrow", d: "Backers deposit USDCx to the covenant. Funds are held by the escrow custodian, not the builder." },
-            { n: "02", t: "Judges verify (2-of-N)", d: "Backers appoint independent judges who cryptographically sign whether the milestone was met." },
-            { n: "03", t: "Route by outcome", d: "Met → 80% grant to builder / 20% back to backers. Not met or timed out → 100% refund." },
+            { n: "01", t: "Fund & lock the pool", d: "The grantor transfers the full pool into a per-program escrow custodian. A program can't be listed until its pool is locked on-chain." },
+            { n: "02", t: "Award with milestones", d: "The grantor accepts one builder and defines the milestone schedule — each with its own deadline and % of the award." },
+            { n: "03", t: "Verify → auto-disburse", d: "Judges attest a milestone met and its tranche pays the builder automatically. A lapsed milestone returns its funds to the grantor." },
           ].map((s) => (
             <div key={s.n} className="border border-[var(--ink)]/10 rounded-sm p-5">
               <div className="font-data-lg text-[var(--brass)] text-sm mb-2">{s.n}</div>
@@ -68,27 +71,24 @@ export default async function CovenantHome() {
 
         <div className="w-full h-px border-t border-[var(--ink)]/20 mb-16" />
 
-        {/* Project Grid - real covenants from the DB */}
+        {/* Program Grid - real programs from the DB */}
         <div id="tour-home-active" className="mb-8 flex items-end justify-between">
           <div>
-            <div className="font-label-caps text-xs tracking-[0.08em] text-[var(--on-surface-variant)]">ACTIVE COVENANTS</div>
-            <div className="font-headline-md text-[24px]">Milestone-Gated Vaults</div>
+            <div className="font-label-caps text-xs tracking-[0.08em] text-[var(--on-surface-variant)]">GRANT PROGRAMS</div>
+            <div className="font-headline-md text-[24px]">Milestone-Gated Pools</div>
           </div>
           <Link href="/projects" className="text-xs font-label-caps tracking-widest text-[var(--ink)] hover:underline">VIEW ALL →</Link>
         </div>
 
-        {projects.length === 0 ? (
+        {programs.length === 0 ? (
           <div className="border border-dashed border-[var(--ink)]/20 rounded-sm p-12 text-center">
-            <p className="text-[var(--on-surface-variant)] mb-4">No covenants have been created yet.</p>
-            <Link href="/projects/create" className="btn-primary inline-block">CREATE THE FIRST COVENANT</Link>
+            <p className="text-[var(--on-surface-variant)] mb-4">No grant programs have been created yet.</p>
+            <Link href="/projects/create" className="btn-primary inline-block">CREATE THE FIRST PROGRAM</Link>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {projects.map((p) => {
-              const raised = p.contributions.filter((c) => c.status !== "WITHDRAWN").reduce((s, c) => s + BigInt(c.amount), BigInt(0));
-              const goal = BigInt(p.fundingGoal);
-              const pct = goal > BigInt(0) ? Math.min(100, Number((raised * BigInt(100)) / goal)) : 0;
-              const resolved = p.status === "RESOLVED_SUCCESS";
+            {programs.map((p: any) => {
+              const awarded = p.status === "AWARDED" || p.status === "COMPLETED";
               return (
                 <Link key={p.id} href={`/projects/${p.id}`} className="group">
                   <article className="relative bg-[var(--parchment)] border border-[var(--ink)]/10 p-6 rounded-sm shadow-[2px_2px_0px_rgba(11,29,29,0.05)] hover:bg-[var(--parchment)]/70 transition-colors flex flex-col h-full">
@@ -99,25 +99,22 @@ export default async function CovenantHome() {
                       <p className="font-body-md text-sm text-[var(--on-surface-variant)] line-clamp-3">{p.description}</p>
                     </div>
                     <div className="mt-auto space-y-6">
-                      <div>
-                        <div className="flex justify-between items-end mb-2">
-                          <span className="font-label-caps text-xs text-[var(--on-surface-variant)]">FUNDING PROGRESS</span>
-                          <span className="font-data-lg text-[15px] text-[var(--ink)]">{formatUsdcx(raised.toString())} / {formatUsdcx(goal.toString())} USDCx</span>
-                        </div>
-                        <div className="progress-bar w-full"><div className={resolved ? "progress-brass" : "progress-fill"} style={{ width: `${resolved ? 100 : pct}%` }} /></div>
-                      </div>
                       <div className="border-t border-[var(--ink)]/10 pt-4 space-y-1">
                         <div className="flex justify-between py-1 border-b border-[var(--ink)]/10 text-sm">
-                          <span className="font-label-caps text-xs text-[var(--on-surface-variant)]">DEADLINE</span>
-                          <span className="font-data-sm text-[var(--ink)]">{formatDeadline((p as any).deadlineAt, p.deadlineBlock)}</span>
+                          <span className="font-label-caps text-xs text-[var(--on-surface-variant)]">POOL</span>
+                          <span className="font-data-sm text-[var(--ink)]">{formatUsdcx(p.totalPool)} USDCx</span>
+                        </div>
+                        <div className="flex justify-between py-1 border-b border-[var(--ink)]/10 text-sm">
+                          <span className="font-label-caps text-xs text-[var(--on-surface-variant)]">HORIZON</span>
+                          <span className="font-data-sm text-[var(--ink)]">{formatDeadline((p as any).programDeadlineAt, p.programDeadlineBlock)}</span>
                         </div>
                         <div className="flex justify-between py-1 text-sm">
-                          <span className="font-label-caps text-xs text-[var(--on-surface-variant)]">BACKERS</span>
-                          <span className="font-data-sm text-[var(--ink)]">{p.contributions.length}</span>
+                          <span className="font-label-caps text-xs text-[var(--on-surface-variant)]">{awarded ? "BUILDER" : "APPLICANTS"}</span>
+                          <span className="font-data-sm text-[var(--ink)]">{awarded ? "AWARDED" : p.applications.length}</span>
                         </div>
                       </div>
                       <div className="block w-full text-center border border-[var(--ink)] py-3 font-label-caps text-xs group-hover:bg-[var(--ink)] group-hover:text-[var(--parchment)] transition-colors">
-                        REVIEW TERMS
+                        {awarded ? "VIEW PROGRESS" : "VIEW & APPLY"}
                       </div>
                     </div>
                   </article>
@@ -148,7 +145,7 @@ export default async function CovenantHome() {
             <div className="border border-[var(--ink)]/10 p-6 rounded-sm">
               <div className="font-label-caps text-xs mb-1 text-[var(--on-surface-variant)]">PAYROLL VAULT</div>
               <div className="font-semibold mb-1">Streaming Payroll with Clawback</div>
-              <p className="text-[var(--on-surface-variant)] text-sm">Time-locked streaming releases with activity check-ins. Missed check-in triggers clawback to backer.</p>
+              <p className="text-[var(--on-surface-variant)] text-sm">Time-locked streaming releases with activity check-ins. Missed check-in triggers clawback to payer.</p>
             </div>
             <div className="border border-[var(--ink)]/10 p-6 rounded-sm">
               <div className="font-label-caps text-xs mb-1 text-[var(--on-surface-variant)]">REPUTATION VAULT</div>
@@ -175,7 +172,7 @@ export default async function CovenantHome() {
         </div>
       </footer>
 
-      <GuidedTour steps={HOME_TOUR} storageKey="covenant-home-tour-v1" />
+      <GuidedTour steps={HOME_TOUR} storageKey="covenant-home-tour-v2" />
     </div>
   );
 }

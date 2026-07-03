@@ -127,27 +127,27 @@ export default function DocsPage() {
                 pays the depositor back. So the contract <strong className="text-[var(--ink)]">cannot natively branch</strong>{" "}
                 &ldquo;if the milestone succeeds send here, otherwise refund there.&rdquo;
               </p>
-              <p>Covenant solves this at the application layer with an escrow custodian:</p>
+              <p>Covenant solves this at the application layer with a <strong className="text-[var(--ink)]">per-program escrow custodian</strong>:</p>
               <div className="card-container p-5 space-y-3">
-                <Step n={1} title="Backers send USDCx to a known custodian address">
-                  A backend-controlled testnet account. Each contribution is tracked in our database against
-                  the backer&rsquo;s wallet and the project.
+                <Step n={1} title="The grantor funds a dedicated custodian">
+                  Each program gets its own deterministic custodian address. The grantor sends the full pool of
+                  USDCx there from their wallet. The program isn&rsquo;t publicly listed until that balance is verified on-chain.
                 </Step>
-                <Step n={2} title="The custodian pools funds into its own FlowVault vault">
-                  It calls <code className="font-data-sm">set-routing-rules</code> + <code className="font-data-sm">deposit</code>,
-                  locking 100% until the deadline block. This is the real on-chain programmable behavior.
+                <Step n={2} title="On award, the pool is locked in FlowVault">
+                  When the grantor accepts a builder and sets the milestone schedule, the custodian calls{" "}
+                  <code className="font-data-sm">set-routing-rules</code> + <code className="font-data-sm">deposit</code>,
+                  locking the pool until the first milestone&rsquo;s deadline block.
                 </Step>
-                <Step n={3} title="Backers appoint judges, who attest (2-of-N multisig)">
-                  The builder <strong className="text-[var(--ink)]">cannot pick the judges</strong> — that would be judging their own work.
-                  After backers deposit, <strong className="text-[var(--ink)]">they</strong> appoint the judges (an backer may appoint themselves).
-                  Each judge connects their wallet and <strong className="text-[var(--ink)]">cryptographically signs</strong> their &ldquo;met&rdquo; / &ldquo;not met&rdquo;
-                  vote; the server verifies the signature against their address. Once 2-of-N sign MET, a dispute window opens before funds move.
+                <Step n={3} title="Judges attest each milestone (2-of-N)">
+                  The grantor names the judges at award time. For the active milestone, each judge connects their wallet
+                  and <strong className="text-[var(--ink)]">cryptographically signs</strong> &ldquo;met&rdquo; / &ldquo;not met&rdquo;;
+                  the server verifies the signature against their address.
                 </Step>
-                <Step n={4} title="The custodian withdraws and settles the grant">
-                  After the lock passes, it calls <code className="font-data-sm">withdraw</code> and sends tracked
-                  SIP-010 transfers. On success the <strong className="text-[var(--ink)]">grant is disbursed</strong>: 80% to
-                  the builder, 20% returned pro-rata to backers. On failure (or if the deadline passes with no 2-of-N
-                  consensus — the <strong className="text-[var(--ink)]">timeout</strong> case), backers are refunded 100%.
+                <Step n={4} title="Each tranche disburses — or expires — automatically">
+                  At a milestone&rsquo;s deadline the reconcile engine acts on its own: if judges attested MET it{" "}
+                  <code className="font-data-sm">withdraw</code>s and pays that tranche to the builder, then re-locks the
+                  remainder until the next deadline. If the deadline passed <strong className="text-[var(--ink)]">un-attested</strong>,
+                  the remaining pool is returned to the grantor and the program ends. No manual &ldquo;release&rdquo; button.
                 </Step>
               </div>
               <p>
@@ -235,32 +235,31 @@ STACKS_PRIVATE_KEY   (your funded custodian key)`}</Code>
               <Step n={1} title="Connect your wallet">
                 Click <strong className="text-[var(--ink)]">CONNECT WALLET</strong> (top right) and approve. Your address appears truncated with a copy button.
               </Step>
-              <Step n={2} title="Create a Covenant">
-                Go to <Link href="/projects" className="underline text-[var(--ink)] hover:no-underline">My Covenants</Link> →
-                {" "}<Link href="/projects/create" className="underline text-[var(--ink)] hover:no-underline">New Covenant</Link>. Give it a title,
-                a milestone description, a funding goal, and a deadline. Submit.
+              <Step n={2} title="Grantor: create a program">
+                Go to <Link href="/projects" className="underline text-[var(--ink)] hover:no-underline">Programs</Link> →
+                {" "}<Link href="/projects/create" className="underline text-[var(--ink)] hover:no-underline">New Program</Link>. Give it a title,
+                a description, eligibility conditions, the total pool, and a horizon. Submit.
               </Step>
-              <Step n={3} title="Back it with USDCx (your first on-chain tx)">
-                On the project page, enter an amount in &ldquo;Fund this grant&rdquo; and confirm. Your wallet signs a
-                transfer to the custodian. An explorer link appears — that&rsquo;s a real testnet transaction.
+              <Step n={3} title="Grantor: fund escrow &amp; publish (your first on-chain tx)">
+                On the program page, click <strong className="text-[var(--ink)]">SEND POOL TO ESCROW</strong> — your wallet signs a
+                USDCx transfer to the program&rsquo;s custodian. Once the balance is verified, click{" "}
+                <strong className="text-[var(--ink)]">PUBLISH PROGRAM</strong>. It&rsquo;s now open to builders.
               </Step>
-              <Step n={4} title="Appoint judges, then lock funds">
-                As a backer, appoint the judges (you can appoint yourself). Then click{" "}
-                <strong className="text-[var(--ink)]">① Lock Funds in Escrow</strong> — the custodian runs{" "}
-                <code className="font-data-sm">set-routing-rules</code> + <code className="font-data-sm">deposit</code>, locking the grant until the deadline.
+              <Step n={4} title="Builder: apply">
+                A builder opens the program, writes a short pitch, and clicks <strong className="text-[var(--ink)]">APPLY TO BUILD</strong>.
               </Step>
-              <Step n={5} title="Judges attest, dispute window opens">
-                Copy the <strong className="text-[var(--ink)]">judge invite link</strong> from the judge panel and send it to your judges.
-                Each connects their wallet and signs a vote. Once 2-of-N sign &ldquo;MET,&rdquo; the covenant moves to the dispute window.
+              <Step n={5} title="Grantor: award + set milestones">
+                The grantor picks one applicant, names the judges, and defines the milestone schedule (each with a name, a % of the
+                award, and a deadline — percentages sum to 100%). Confirming <strong className="text-[var(--ink)]">locks the pool in FlowVault</strong> until milestone 1.
               </Step>
-              <Step n={6} title="Settle">
-                Use <strong className="text-[var(--ink)]">Disburse Grant</strong> (80% builder / 20% back to backers, enabled
-                only after 2-of-N sign MET), <strong className="text-[var(--ink)]">Refund Backers</strong> (milestone not met), or —
-                if the deadline passes with no consensus — the <strong className="text-[var(--ink)]">timeout refund</strong>. Every
-                transfer is logged with an explorer link.
+              <Step n={6} title="Build → attest → auto-disburse">
+                The builder marks a milestone <strong className="text-[var(--ink)]">ready for review</strong>; judges sign{" "}
+                <strong className="text-[var(--ink)]">MET</strong>. At that milestone&rsquo;s deadline the tranche pays the builder
+                automatically and the remainder re-locks for the next one. A milestone that lapses un-attested returns its funds to the grantor —
+                no manual settlement, every transfer logged with an explorer link.
               </Step>
               <p className="text-sm pt-2">
-                That&rsquo;s a complete conditional-treasury cycle on real testnet infrastructure — exactly what a demo video should show.
+                That&rsquo;s a complete milestone-grant cycle on real testnet infrastructure — exactly what a demo video should show.
               </p>
             </div>
           </section>
@@ -268,12 +267,12 @@ STACKS_PRIVATE_KEY   (your funded custodian key)`}</Code>
           {/* 6. Vault types */}
           <section id="vaulttypes" className="scroll-mt-24">
             <h2 className="font-headline-md text-2xl mb-3">6. The vault types</h2>
-            <p className="text-sm text-[var(--on-surface-variant)] mb-4">The <strong className="text-[var(--ink)]">Milestone-Gated Grant</strong> is the flagship — a grant that&rsquo;s only disbursed to the builder when independent judges verify the milestone. The other three are secondary behaviors built on the same escrow + FlowVault primitives. All execute real on-chain USDCx transfers.</p>
+            <p className="text-sm text-[var(--on-surface-variant)] mb-4">The <strong className="text-[var(--ink)]">Milestone-Based Grant</strong> is the flagship — a grantor-funded pool disbursed tranche-by-tranche to one builder as independent judges verify each milestone. The other three are secondary behaviors built on the same escrow + FlowVault primitives. All execute real on-chain USDCx transfers.</p>
             <div className="grid sm:grid-cols-2 gap-4">
               <Link href="/projects" className="card-container p-5 block hover:opacity-80 transition-opacity">
-                <div className="font-label-caps text-xs text-[var(--on-surface-variant)]">MILESTONE · LIVE</div>
-                <div className="font-semibold mt-1">Milestone-Gated Vault</div>
-                <p className="text-sm text-[var(--on-surface-variant)] mt-1">Pooled funding released only when invited judges cryptographically sign that a milestone is met, with a dispute window.</p>
+                <div className="font-label-caps text-xs text-[var(--on-surface-variant)]">GRANT · LIVE</div>
+                <div className="font-semibold mt-1">Milestone-Based Grant</div>
+                <p className="text-sm text-[var(--on-surface-variant)] mt-1">A grantor locks a pool; each milestone&rsquo;s tranche auto-disburses to the awarded builder when judges attest it met, or returns to the grantor if it lapses.</p>
               </Link>
               <Link href="/vaults/payroll" className="card-container p-5 block hover:opacity-80 transition-opacity">
                 <div className="font-label-caps text-xs text-[var(--on-surface-variant)]">PAYROLL · LIVE</div>
@@ -307,7 +306,7 @@ STACKS_PRIVATE_KEY   (your funded custodian key)`}</Code>
 
         {/* Footer CTA */}
         <div className="mt-16 pt-8 border-t border-[var(--ink)]/20 flex flex-col sm:flex-row gap-4">
-          <Link href="/projects/create" className="btn-primary text-center">CREATE A COVENANT</Link>
+          <Link href="/projects/create" className="btn-primary text-center">CREATE A PROGRAM</Link>
           <a href="https://docs.flow-vault.dev" target="_blank" rel="noreferrer" className="btn-secondary text-center">FLOWVAULT DOCS ↗</a>
         </div>
       </main>

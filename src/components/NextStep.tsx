@@ -1,68 +1,66 @@
 "use client";
 
 import Link from "next/link";
-import { formatUsdcx } from "@/src/lib/units";
 
-export type Role = "backer" | "builder";
+export type Role = "grantor" | "builder" | "judge";
 
 export interface NextStepInput {
   role: Role;
   id: string;
-  status: string;
-  raisedMicro: string | number;
-  goalMicro: string | number;
-  minBps: number;
-  metMin: boolean;
-  judgeCount: number;
-  metCount?: number;
-  threshold?: number;
-  myContributionMicro?: string | number;
-  myWithdrawn?: boolean;
-  linkToDetail?: boolean; // show a "Open campaign" link (used on the dashboard)
+  status: string;               // program status: DRAFT | FUNDED_OPEN | AWARDED | COMPLETED | EXPIRED
+  applicationStatus?: string | null; // for builders: PENDING | ACCEPTED | REJECTED
+  activeMilestone?: { index: number; name: string; status: string } | null;
+  linkToDetail?: boolean;
 }
 
-// The four on-chain phases every campaign moves through. Derived from the same
-// `status` the settlement buttons gate on, so the stepper and buttons never disagree.
-const PHASES = ["Funding", "Locked", "Judging", "Resolved"];
+// The phases a grant program moves through. Derived from the same `status` the
+// detail page's action panel gates on, so stepper and actions never disagree.
+const PHASES = ["Fund", "Open", "Building", "Done"];
 
 function phaseOf(status: string): number {
-  if (status === "POOLED_LOCKED") return 1;
-  if (status === "DISPUTE_WINDOW") return 2;
-  if (status === "RESOLVED_SUCCESS" || status === "RESOLVED_FAILURE") return 3;
-  return 0; // CREATED / BACKING_OPEN / anything else
+  if (status === "FUNDED_OPEN") return 1;
+  if (status === "AWARDED") return 2;
+  if (status === "COMPLETED" || status === "EXPIRED") return 3;
+  return 0; // DRAFT
 }
 
 function guidance(p: NextStepInput): { title: string; detail: string } {
   const phase = phaseOf(p.status);
-  const resolvedOk = p.status === "RESOLVED_SUCCESS";
-  const mine = Number(p.myContributionMicro || 0);
-  const minPct = Math.round(p.minBps / 100);
+  const ms = p.activeMilestone;
 
-  if (p.role === "backer") {
-    if (phase === 0) {
-      if (mine <= 0 || p.myWithdrawn) return { title: "Fund this grant", detail: "Enter an amount and confirm. Your USDCx goes into escrow, not to the builder — it's only disbursed if the milestone is met." };
-      if (!p.metMin) return { title: "Funding is below the minimum", detail: `Only ${minPct}%+ of the goal unlocks this grant. You can withdraw your contribution now, or wait — funds stay parked in escrow until the builder decides.` };
-      return { title: "You're in — appoint judges", detail: "Minimum reached. As a backer you can appoint the judges who'll verify the milestone (you can appoint yourself), then the builder locks the funds." };
+  if (p.role === "grantor") {
+    if (phase === 0) return { title: "Fund the escrow", detail: "Send the full pool to this program's custodian, then publish it so builders can apply." };
+    if (phase === 1) return { title: "Review applications", detail: "Builders are applying. Accept one and define their milestone schedule to award the grant." };
+    if (phase === 2) return { title: "Grant in progress", detail: `Milestones disburse automatically at each deadline. ${ms ? `Active: M${ms.index + 1} (${ms.name}).` : ""} Nothing to click — the schedule runs itself.` };
+    return p.status === "COMPLETED"
+      ? { title: "Program complete", detail: "Every milestone was attested and paid. The full pool went to the builder." }
+      : { title: "Program expired", detail: "A milestone lapsed un-attested. The remaining pool was returned to your wallet." };
+  }
+
+  if (p.role === "builder") {
+    if (phase <= 1) {
+      if (p.applicationStatus === "ACCEPTED") return { title: "You were awarded", detail: "Open the program to start on milestone 1." };
+      if (p.applicationStatus === "REJECTED") return { title: "Not selected", detail: "The grantor awarded another builder for this program." };
+      if (p.applicationStatus === "PENDING") return { title: "Application pending", detail: "The grantor is reviewing applications. If awarded, you'll get a milestone schedule." };
+      return { title: "Apply to build", detail: "Open the program and submit a pitch to be considered for the award." };
     }
-    if (phase === 1) return { title: "Funds locked in escrow", detail: "Your contribution is locked on-chain in FlowVault until the deadline. Judges will attest whether the milestone was met." };
-    if (phase === 2) return { title: "Judges are attesting", detail: `${p.metCount ?? 0} of ${p.threshold ?? 2} needed have signed MET. If they reach the threshold the grant is disbursed; if the deadline passes without consensus, you're refunded.` };
-    return resolvedOk
-      ? { title: "Milestone met — grant disbursed", detail: "The covenant resolved successfully. The grant went to the builder; your pro-rata 20% share was returned to your wallet." }
-      : { title: "Not met — refunded", detail: "The milestone wasn't met (or the deadline passed without consensus). Your contribution was refunded in full." };
+    if (phase === 2) {
+      if (!ms) return { title: "Grant in progress", detail: "Your award is active." };
+      if (ms.status === "LOCKED") return { title: `Build M${ms.index + 1}: ${ms.name}`, detail: "When it's done, mark the milestone ready so judges can attest it." };
+      return { title: `M${ms.index + 1} in review`, detail: "Judges are attesting. The tranche auto-pays you at the deadline if they attest MET." };
+    }
+    return p.status === "COMPLETED"
+      ? { title: "All milestones paid", detail: "You completed the grant — every tranche was disbursed to your wallet." }
+      : { title: "Grant expired", detail: "A milestone deadline passed without attestation; remaining funds returned to the grantor." };
   }
 
-  // builder
-  if (phase === 0) {
-    if (Number(p.raisedMicro) <= 0) return { title: "Waiting for backers", detail: "Your campaign is live. Share it — backers fund the grant into escrow, then appoint the judges." };
-    if (!p.metMin) return { title: "Below your minimum", detail: `You set a ${minPct}% minimum. Wait for more backers, or accept the partial raise to proceed with what's in escrow.` };
-    if (p.judgeCount === 0) return { title: "Waiting on judges", detail: "You've hit your minimum. Backers need to appoint at least one judge before you can lock the funds." };
-    return { title: "Ready to lock funds", detail: "Minimum reached and judges appointed. Lock the raised USDCx in escrow to start the milestone period." };
+  // judge
+  if (phase === 2 && ms) {
+    if (ms.status === "PAID" || ms.status === "EXPIRED") return { title: "Milestone settled", detail: "Waiting for the next milestone to become active." };
+    return { title: `Attest M${ms.index + 1}: ${ms.name}`, detail: "Open the program and sign MET or NOT MET. Your vote gates the automatic payout at the deadline." };
   }
-  if (phase === 1) return { title: "Funds locked", detail: "The grant is locked in FlowVault until the deadline. Waiting for judges to attest the milestone." };
-  if (phase === 2) return { title: "Judges attesting", detail: `${p.metCount ?? 0} of ${p.threshold ?? 2} needed have signed MET. Once the threshold is met, disburse the grant (80% to you, 20% returned to backers). If the deadline passes without consensus, backers are refunded.` };
-  return resolvedOk
-    ? { title: "Grant disbursed — milestone met", detail: "Resolved successfully. 80% went to your treasury, 20% pro-rata to backers." }
-    : { title: "Refunded — not met", detail: "The milestone wasn't met (or timed out). 100% of the pool was refunded to backers." };
+  if (phase === 3) return { title: "Program finished", detail: "No further attestations needed." };
+  return { title: "Awaiting award", detail: "Once the grantor awards a builder, you'll attest their milestones." };
 }
 
 export function NextStep(props: NextStepInput) {
@@ -71,7 +69,6 @@ export function NextStep(props: NextStepInput) {
 
   return (
     <div className="border border-[var(--ink)]/15 rounded-sm p-5 bg-[var(--surface-container-low)]">
-      {/* Stepper */}
       <div className="flex items-center mb-4">
         {PHASES.map((label, i) => (
           <div key={label} className="flex items-center flex-1 last:flex-none">
@@ -88,13 +85,12 @@ export function NextStep(props: NextStepInput) {
         ))}
       </div>
 
-      {/* Current action */}
       <div className="border-t border-[var(--ink)]/10 pt-3">
         <div className="font-label-caps text-[10px] text-[var(--brass)] mb-0.5">YOU ARE HERE · {props.role.toUpperCase()}</div>
         <div className="font-semibold text-sm text-[var(--ink)]">{g.title}</div>
         <p className="text-xs text-[var(--on-surface-variant)] mt-1">{g.detail}</p>
         {props.linkToDetail && (
-          <Link href={`/projects/${props.id}`} className="btn-secondary text-[11px] px-3 py-1.5 mt-3 inline-block">OPEN CAMPAIGN →</Link>
+          <Link href={`/projects/${props.id}`} className="btn-secondary text-[11px] px-3 py-1.5 mt-3 inline-block">OPEN PROGRAM →</Link>
         )}
       </div>
     </div>

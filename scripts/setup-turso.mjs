@@ -81,32 +81,11 @@ function loadSchemaStatements() {
     .map((s) => s.replace(/^CREATE INDEX /i, "CREATE INDEX IF NOT EXISTS "));
 }
 
-// Idempotent column migrations for databases created before a column existed.
-// SQLite errors with "duplicate column name" if it's already there — we ignore that.
-const MIGRATIONS = [
-  `ALTER TABLE "Project" ADD COLUMN "judges" TEXT NOT NULL DEFAULT '[]'`,
-  `ALTER TABLE "PayrollVault" ADD COLUMN "releasedAmount" TEXT NOT NULL DEFAULT '0'`,
-  `ALTER TABLE "PayrollVault" ADD COLUMN "clawbackExplorerUrl" TEXT`,
-  `ALTER TABLE "CheckIn" ADD COLUMN "amount" TEXT`,
-  `ALTER TABLE "CheckIn" ADD COLUMN "explorerUrl" TEXT`,
-  `ALTER TABLE "ReputationVault" ADD COLUMN "resolvedExplorerUrl" TEXT`,
-  `ALTER TABLE "ReputationVault" ADD COLUMN "payouts" TEXT NOT NULL DEFAULT '[]'`,
-  `ALTER TABLE "InsurancePool" ADD COLUMN "resolvedExplorerUrl" TEXT`,
-  `ALTER TABLE "InsurancePool" ADD COLUMN "payouts" TEXT NOT NULL DEFAULT '[]'`,
-  `ALTER TABLE "InsuranceContribution" ADD COLUMN "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP`,
-  `ALTER TABLE "PayrollVault" ADD COLUMN "depositTxid" TEXT`,
-  `ALTER TABLE "PayrollVault" ADD COLUMN "depositExplorerUrl" TEXT`,
-  `ALTER TABLE "ReputationVault" ADD COLUMN "depositTxid" TEXT`,
-  `ALTER TABLE "ReputationVault" ADD COLUMN "depositExplorerUrl" TEXT`,
-  `ALTER TABLE "InsuranceContribution" ADD COLUMN "depositTxid" TEXT`,
-  `ALTER TABLE "InsuranceContribution" ADD COLUMN "depositExplorerUrl" TEXT`,
-  `ALTER TABLE "Project" ADD COLUMN "minFundingBps" INTEGER NOT NULL DEFAULT 10000`,
-  `ALTER TABLE "Project" ADD COLUMN "builderAcceptedPartial" BOOLEAN NOT NULL DEFAULT false`,
-  `ALTER TABLE "BackerContribution" ADD COLUMN "status" TEXT NOT NULL DEFAULT 'ACTIVE'`,
-  `ALTER TABLE "BackerContribution" ADD COLUMN "refundTxid" TEXT`,
-  `ALTER TABLE "BackerContribution" ADD COLUMN "refundExplorerUrl" TEXT`,
-  `ALTER TABLE "Project" ADD COLUMN "deadlineAt" DATETIME`,
-];
+// The grant-model schema.sql fully defines every current table with
+// `CREATE TABLE IF NOT EXISTS`, so no incremental column migrations are needed.
+// (The pre-pivot crowdfunding tables — Project / BackerContribution / etc. — are
+// left untouched if they still exist in an old database; they're simply unused.)
+const MIGRATIONS = [];
 
 async function runMigrations() {
   for (const sql of MIGRATIONS) {

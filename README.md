@@ -6,82 +6,84 @@
 
 Funds only move when real-world conditions are verifiably met.
 
-- **Flagship feature**: the **Milestone-Gated Grant** — backers fund a grant into escrow; it's only **disbursed** to the builder (80%, with 20% returned to backers) when independent judges verify the milestone.
-- Uses FlowVault primitives for time-locking pooled capital and deterministic routing.
-- Real on-chain testnet transactions via the escrow custodian pattern.
-- **Grant framing, not investment**: backers fund a milestone grant; there are no financial returns — the 20% is a pro-rata return of unused pool, not a yield.
+- **Flagship feature**: the **Milestone-Based Grant** — a **grantor** locks a pool into a dedicated escrow, awards it to one **builder** against a milestone schedule, and each milestone's tranche is **automatically disbursed** to the builder when independent **judges** attest it met (or **returned to the grantor** if a milestone lapses un-attested).
+- Uses FlowVault primitives for time-locking each tranche and deterministic routing (staged re-lock across milestones).
+- Real on-chain testnet transactions via the per-program escrow custodian pattern.
+- **Grant distribution, not crowdfunding**: a single grantor funds the pool up-front; there are no backers, no pooled investment, and no pro-rata returns.
 - Secondary vault types: Payroll (streaming + clawback), Reputation-weighted, Parametric Insurance.
 
 ## FlowVault Integration (Required Deliverable)
 
 **Core Truth (per official docs)**: FlowVault provides one contract (`flowvault-v2`) with **principal-scoped routing rules**.
 
-SDK methods used (via the `flowvault-sdk` `FlowVault` client — see `src/lib/flowvault.ts:createBackendVault` and the calls in `src/lib/escrow.ts`):
+SDK methods used (via the `flowvault-sdk` `FlowVault` client — see `createBackendVault` in `src/lib/flowvault.ts` and the calls in `src/lib/escrow.ts`):
 
-| SDK method | Where | Contract fn |
+| SDK method | Where (function) | Contract fn |
 |---|---|---|
-| `setRoutingRules(...)` | `src/lib/escrow.ts:58` | `set-routing-rules` |
-| `deposit(amount)` | `src/lib/escrow.ts:69` | `deposit` |
-| `withdraw(amount)` | `src/lib/escrow.ts:91` | `withdraw` |
-| `getVaultState(principal)` | `src/lib/escrow.ts:105` | `get-vault-state` (read) |
-| `getRoutingRules(principal)` | `src/lib/escrow.ts:111` | `get-routing-rules` (read) |
-| `clearRoutingRules()` | `src/lib/escrow.ts:116` | `clear-routing-rules` |
+| `setRoutingRules(...)` | `escrow.ts` `lockPoolForProgram` / `poolIntoVault` | `set-routing-rules` |
+| `deposit(amount)` | `escrow.ts` `lockPoolForProgram` / `poolIntoVault` | `deposit` |
+| `withdraw(amount)` | `escrow.ts` `withdrawFromProgram` / `withdrawFromVault` | `withdraw` |
+| `getVaultState(principal)` | `escrow.ts` `getProgramVaultState` | `get-vault-state` (read) |
+| `getRoutingRules(principal)` | `escrow.ts` `getRoutingRulesForCustodian` | `get-routing-rules` (read) |
+| `clearRoutingRules()` | `escrow.ts` `clearRoutingRules` | `clear-routing-rules` |
 
 ### Hold / Split / Lock — how the bounty primitives map to real calls
 
 The bounty lists "Lock Vault Flow / Split Vault Flow / Hold Vault Flow." **These are not separate contracts** — FlowVault ships one `flowvault-v2` contract with principal-scoped routing rules. Covenant implements all three as *behavior* on that single contract:
 
-- **Hold behavior** — funds sit in the custodian's vault as unlocked balance (plain `deposit` with no lock), withdrawable at settlement.
-- **Lock behavior** — `setRoutingRules(lockAmount, lockUntilBlock, …)` + `deposit` time-locks the pooled grant on-chain until the deadline block; `withdraw` can only pull unlocked balance, always back to the caller.
-- **Split behavior** — the routing rule's `splitAddress`/`splitAmount` route part of a deposit to another principal automatically; Covenant also performs the conditional 80/20 grant split at settlement via tracked SIP-010 transfers (the underlying contract can't branch on a future event — see below).
+- **Hold behavior** — funds sit in a program custodian's vault as unlocked balance (plain `deposit` with no lock), withdrawable when a tranche is due.
+- **Lock behavior** — `setRoutingRules(lockAmount, lockUntilBlock, …)` + `deposit` time-locks the remaining pool on-chain until the **active milestone's deadline block**; `withdraw` can only pull unlocked balance, always back to the caller.
+- **Split behavior** — the routing rule's `splitAddress`/`splitAmount` route part of a deposit to another principal automatically; Covenant performs each milestone payout to the builder (and any grantor return) via tracked SIP-010 transfers (the underlying contract can't branch on a future event — see below).
 
-This is orchestrated by the **escrow-custodian pattern** because the primitive is *principal-scoped, not project-scoped* — a single custodian principal holds one vault per covenant lifecycle. The same `src/lib/flowvault.ts` + `src/lib/escrow.ts` wrapper is **reused across all four vault types** (Milestone, Payroll, Reputation, Insurance) — the composability / reusable-integration signal the bounty explicitly rewards.
+**Staged re-lock.** Because a principal can hold only one active lock and a time-lock can't release early on a condition, each program uses a **dedicated custodian** and re-locks in stages: the whole remaining pool is locked until the active milestone's deadline; at that deadline the custodian withdraws, pays the earned tranche, and re-locks the remainder until the next milestone. The reconcile engine (`src/lib/reconcile.ts`) advances at most one on-chain step per call, each gated on the previous tx confirming.
+
+This is orchestrated by the **per-program escrow-custodian pattern** because the primitive is *principal-scoped, not program-scoped* — each program gets its own deterministic custodian principal holding one vault (and one lock) for that program's lifecycle. The same `src/lib/flowvault.ts` + `src/lib/escrow.ts` wrapper is **reused across all four vault types** (Grant, Payroll, Reputation, Insurance) — the composability / reusable-integration signal the bounty explicitly rewards.
 
 ### Why the Escrow Custodian Pattern
 
 FlowVault routing rules are fixed **at the moment of each deposit** by the depositing principal. There is no native way for the contract to branch destination or amounts based on future events ("did the milestone succeed?").
 
 **Honest architecture**:
-1. Users (backers) send SIP-010 (USDCx) to a **known custodian address** (backend-controlled testnet key). These transfers are tracked in our DB against the project.
-2. The custodian account pools the funds into **its own FlowVault vault** for the covenant via `setRoutingRules` + `deposit`. This is where the **real programmable behavior** happens on-chain (lock and/or split).
-3. At resolution time (after attestations, lock height passed), custodian calls `withdraw()` to unlock.
-4. Custodian then executes tracked SIP-010 transfers (via `@stacks/transactions`) to the correct parties based on the application-level outcome:
-   - **Milestone met** (2-of-N judges signed MET): grant disbursed — 80% to the builder, 20% returned pro-rata to backers.
-   - **Milestone not met**: 100% refunded pro-rata to backers.
-   - **Timeout** (deadline passes with no 2-of-N consensus): app-layer safety rule — the grant is cancelled and backers are refunded 100%.
+1. The **grantor** sends SIP-010 (USDCx) from their own wallet to the program's **dedicated custodian address** (deterministically derived from the master key; the private key is never stored or sent to the client). The program is only publicly listed once that on-chain balance is verified.
+2. On **award**, the custodian pools the funds into **its own FlowVault vault** via `setRoutingRules` + `deposit`, locking until the first milestone's deadline. This is where the **real programmable behavior** happens on-chain.
+3. At each milestone's deadline, the reconcile engine has the custodian call `withdraw()` on the remaining balance.
+4. The custodian then executes tracked SIP-010 transfers (via `@stacks/transactions`) based on the attestation outcome:
+   - **Milestone met** (2-of-N judges signed MET): that tranche's % is paid to the builder, then the remainder is re-locked until the next milestone.
+   - **Milestone lapsed** (deadline passes with no 2-of-N MET): the remaining pool is returned to the grantor and the program ends. No funds move to the builder.
 
 **Other app-layer decisions worth noting:**
-- **Minimum-funding threshold**: the builder sets a minimum % of the goal. Below it the covenant can't be locked — backers can **withdraw** their deposit, or the builder can **accept the partial raise** to proceed.
-- **Backers control the judges**: the builder cannot pick their own referees. Backers appoint judges after depositing (see below).
+- **Escrow-lock gates listing**: a program can't be publicly listed until the full pool is verified in its custodian on-chain.
+- **Deadline-gated payout**: a tranche pays at its milestone's deadline block (a FlowVault time-lock can't release early on a condition), so demo milestones use short deadlines.
+- **Grantor names the judges** at award time; the builder cannot attest their own work.
 
 All state changes and distributions are logged with txids + direct explorer links.
 
 **Files**:
 - `src/lib/flowvault.ts` — typed wrapper + error mapping
-- `src/lib/escrow.ts` — reusable custodian actions (pool, withdraw, transfer)
+- `src/lib/escrow.ts` — reusable custodian actions (per-program derive, lock, withdraw, transfer)
+- `src/lib/reconcile.ts` — the automatic milestone disbursement / expiry state machine
 - All features import from these shared modules.
 
 This satisfies bounty emphasis on "depth of use of FlowVault's programmable primitives" and "composability".
 
 ## ✅ Live testnet transaction (auditable)
 
-A real, executed FlowVault `set-routing-rules` + `deposit` on Stacks testnet, produced by the app's **Lock Funds in Escrow** action and **surfaced in the running app** (the covenant timeline links straight to the explorer):
+A real, executed FlowVault `set-routing-rules` + `deposit` on Stacks testnet, produced by the pool-lock step and **surfaced in the running app** (the program page links straight to the explorer):
 
 - **Tx:** [`d31b9c00…d990d141`](https://explorer.hiro.so/txid/d31b9c0039700accf2158990090207cd78619c1977654aa2193cda9ad990d141?chain=testnet)
 - Contract: `STD7QG84VQQ0C35SZM2EYTHZV4M8FQ0R7YNSQWPD.flowvault-v2` · fn `deposit`
-- Custodian: `ST27FAPQP4FMKYFRHB1Q0AMT82TNKDF23YA9QKW24`
 
-Open the [live app](https://thecovenant.vercel.app) → the pooled covenant → the timeline / settlement panel shows the clickable "Lock tx ↗" link. Every subsequent settlement transfer is logged the same way.
+Open the [live app](https://thecovenant.vercel.app) → an awarded program → the program page shows the clickable lock tx link, and every milestone payout / grantor return is logged the same way.
 
 ## How Covenant maps to the judging criteria
 
-**Innovation & Design (35%).** Covenant is *prediction-market treasury routing*: "will this builder ship?" — resolved by a 2-of-N wallet-signed multisig attestation, not by the fund-receiver. Novel financial behavior stacked on top: **grant framing** (milestone grants, not investments), an **investor-controlled judge** model (the builder can't pick their own referees), a **minimum-funding threshold** with backer-withdraw / builder-accept-partial, a **dispute window**, and a **deadline-timeout auto-refund** safety fallback. None of this is a plain deposit form.
+**Innovation & Design (35%).** Covenant is *milestone-gated grant routing*: a grantor's pool is released tranche-by-tranche only as a 2-of-N wallet-signed judge attestation confirms each milestone — never by the fund-receiver. Novel behavior stacked on top: a **staged re-lock** across sequential milestones on a single-lock-per-principal primitive, **automatic** deadline-gated disbursement (no manual release button), **auto-return** of unearned funds to the grantor, and an **escrow-lock gate** that blocks public listing until the pool is on-chain. None of this is a plain deposit form.
 
 **FlowVault Integration (30%).** Real `flowvault-sdk` calls for lock/deposit/withdraw + read-only `getVaultState`/`getRoutingRules` (table above), grounded honestly in the single-contract reality (Hold/Split/Lock mapping above). One shared wrapper (`flowvault.ts` / `escrow.ts`) reused across all four vault types — composability + reusable integrations.
 
-**Technical Execution (20%).** Typed FlowVault error mapping (`mapFlowVaultError`), all amounts handled as **bigint/micro-unit strings, never floats** (single `src/lib/units.ts` source of truth), `getVaultState` polling for read-after-write consistency, case-normalized address comparisons (`src/lib/address.ts`), a full wallet-linked **dashboard**, guided step-by-step UX, and server-side signature verification of every attestation.
+**Technical Execution (20%).** Typed FlowVault error mapping (`mapFlowVaultError`), all amounts handled as **bigint/micro-unit strings, never floats** (single `src/lib/units.ts` source of truth), a **confirmation-gated reconcile engine** that advances one on-chain tx per call to avoid nonce collisions, on-chain balance verification before listing, case-normalized address comparisons (`src/lib/address.ts`), a wallet-linked **grantor/builder/judge dashboard**, guided step-by-step UX, and server-side signature verification of every attestation.
 
-**Ecosystem Value (15%).** The **escrow-custodian pattern** is a reusable recipe for *any* conditional-treasury behavior on FlowVault where the outcome depends on a future event — demonstrated across Milestone, Payroll, Reputation, and Insurance vaults from one shared module, so it's clearly a pattern, not a one-off. Other Stacks builders can lift `flowvault.ts` / `escrow.ts` directly.
+**Ecosystem Value (15%).** The **per-program escrow-custodian + staged re-lock pattern** is a reusable recipe for *any* conditional-treasury behavior on FlowVault where the outcome depends on a future event — demonstrated across Grant, Payroll, Reputation, and Insurance vaults from one shared module, so it's clearly a pattern, not a one-off. Other Stacks builders can lift `flowvault.ts` / `escrow.ts` / `reconcile.ts` directly.
 
 ## Contracts & Deployment
 
@@ -94,7 +96,7 @@ The only setup that resembles a "deployment" is **funding the escrow custodian a
 
 ### Database (local vs. production)
 
-Off-chain tracking (backers, attestations, reputation, check-ins) lives in a SQLite database via Prisma's driver adapter.
+Off-chain tracking (programs, applications, milestones, attestations, distributions, reputation, check-ins) lives in a SQLite database via Prisma's driver adapter.
 
 - **Local dev:** a SQLite file (`file:./dev.db`) — a pre-seeded `dev.db` is included.
 - **Production (Vercel):** Vercel's filesystem is read-only, so a local file cannot be written. Covenant uses **[Turso](https://turso.tech)** — a hosted, SQLite-compatible (libSQL) database — with **no schema changes**. When `TURSO_DATABASE_URL` is set it is used automatically; otherwise the app falls back to the local file.
@@ -175,82 +177,49 @@ Open **http://localhost:3000** — or read the built-in **Docs** page at **http:
 
 **Pro tip**: Click the sun/moon icon in the nav to toggle **Dark Mode** (beautiful deep ledger theme included).
 
-### Full End-to-End Cycle Walkthrough (Real Transactions) — Dummy Edition
+### Full End-to-End Cycle Walkthrough (Real Transactions)
 
-**Goal**: You will create a project, send real testnet money to it, lock the money using FlowVault, and then release or refund it — all with clickable explorer links.
+**Goal**: As a grantor you'll create a program, lock the pool in FlowVault, award a builder with a milestone schedule, and watch a tranche auto-disburse when judges attest — all with clickable explorer links.
 
 **Before you start**: Make sure you have:
 - A Stacks testnet wallet connected in the app (your address shows in the top right).
-- The `STACKS_PRIVATE_KEY` in `.env.local` belongs to an address that has been funded with testnet USDCx and STX.
+- The `STACKS_PRIVATE_KEY` in `.env.local` belongs to a funded master custodian address (testnet STX for gas; it gas-funds each per-program custodian).
+- Your grantor wallet holds the USDCx pool you intend to award.
 
 #### Step-by-step (with exact things you will see)
 
 1. **Open the app and connect**
-   - Go to the live app at https://thecovenant.vercel.app (or http://localhost:3000 if running locally)
-   - Click the **CONNECT WALLET** button.
-   - Approve in your wallet (Xverse/Leather).
-   - Magic: Your address now appears in the top-right nav bar like `ST1ABC...1234` with a copy icon.
-   - Click the sun/moon to try **Dark Mode** — the whole site becomes a beautiful dark ledger.
+   - Go to the live app at https://thecovenant.vercel.app (or http://localhost:3000 locally).
+   - Click **CONNECT WALLET** and approve. Your address appears top-right with a copy icon.
 
-2. **Create your first Covenant**
-   - Click **MY COVENANTS** in the nav.
-   - Click **+ NEW COVENANT**.
-   - Fill the form (copy-paste if you want):
-     - Title: `Test Covenant for Demo`
-     - Milestone Description: `Launch the landing page and get 100 signups`
-     - Funding Goal: `1500`
-     - Pick a deadline a few days away.
-   - Hit **INITIALIZE COVENANT**.
-   - You will be taken to the project detail page.
+2. **Grantor: create a program**
+   - Click **PROGRAMS** → **+ NEW PROGRAM**.
+   - Title: `Test Grant for Demo` · Description + eligibility conditions · Total pool: `1500` · pick a short horizon.
+   - Hit **CREATE PROGRAM** → you land on the program page (status **DRAFT**).
 
-3. **Explore the Project Detail Page (this is beautiful)**
-   - You see a professional timeline on the left.
-   - Big **LIVE VAULT BALANCE** box.
-   - **CUSTODIAN ADDRESS** section:
-     - The long ST... address
-     - **COPY** button (click it — it says COPIED!)
-     - **CHECK BALANCE** button — click it. It will show something like `0.00 USDCx` (because nothing is there yet).
-   - Judge panel (demo 2-of-3).
-   - Big "Back this Covenant" box.
+3. **Grantor: fund escrow & publish (your first on-chain tx)**
+   - The page shows this program's dedicated **custodian address** and a live balance.
+   - Click **SEND POOL TO ESCROW** — your wallet signs a `1500 USDCx` transfer to that custodian. An explorer link opens.
+   - Once the balance shows funded, click **PUBLISH PROGRAM** (status → **FUNDED_OPEN**). It's now listed publicly.
 
-4. **Back the project with real money (your first on-chain tx)**
-   - In the "Back this Covenant" box, enter `250`.
-   - Click the big button.
-   - Your wallet will open asking to **sign a transfer** of 250 USDCx to the custodian.
-   - Approve the transaction.
-   - A toast appears and a new browser tab opens with the **real explorer link**.
-   - Go back to the page and refresh.
-   - Your contribution now appears in the **Backer Ledger** table with a real tx link next to it.
+4. **Builder: apply** (use a second wallet)
+   - Open the program, write a short pitch, click **APPLY TO BUILD**.
 
-   Congratulations — you just sent real money on Stacks testnet!
+5. **Grantor: award + set milestones**
+   - Back as the grantor, expand the applicant → **AWARD TO THIS BUILDER**.
+   - Add judge address(es) and define milestones (e.g. `Design 20%`, `Build 50%`, `Ship 30%`) each with a short deadline; percentages must sum to 100%.
+   - **CONFIRM AWARD & LOCK POOL** — the custodian runs `set-routing-rules` + `deposit`, locking the pool until milestone 1's deadline (status → **AWARDED**). A lock explorer link appears.
 
-5. **Appoint judges (as a backer)**
-   - Only backers who funded can appoint judges — the builder can't pick their own referees.
-   - In the judge panel, add a judge address (or click **Add myself as a judge**). Appoint at least one before locking.
+6. **Builder → judges → automatic payout**
+   - Builder clicks **MARK MILESTONE READY FOR REVIEW**.
+   - Each judge connects their wallet and clicks **ATTEST MET** — the wallet signs; the server verifies the signature.
+   - At the milestone's deadline block, the reconcile engine automatically `withdraw`s, pays that tranche to the builder, and re-locks the remainder for milestone 2 — **no manual release**. Loading the page (or the sync endpoint) advances it.
 
-6. **Lock the money into FlowVault (the magic programmable part)**
-   - In the **SETTLEMENT** section, click **① LOCK FUNDS IN ESCROW** (enabled once funding ≥ your minimum and judges are appointed).
-   - The app calls `set-routing-rules` + `deposit` using the custodian key in `.env`.
-   - A new explorer link appears — the funds are now locked in FlowVault until the deadline.
+7. **Verify everything**
+   - The milestone checklist shows each tranche's state (LOCKED → IN REVIEW → PAID) with a payout explorer link.
+   - Let a milestone deadline pass **un-attested** to see the auto-expire path: the remaining pool is returned to the grantor and the program ends (status → **EXPIRED**).
 
-7. **Judges attest (wallet-signed)**
-   - Each appointed judge connects their wallet and clicks **ATTEST: MET** — their wallet signs the vote and the server verifies the signature.
-   - Once 2-of-N sign MET, the covenant moves to the dispute window.
-
-8. **Settle the grant**
-   - Click **② DISBURSE GRANT — milestone met** (enabled only after 2-of-N MET). The custodian:
-     - Calls `withdraw()` on FlowVault (unlocks the money),
-     - Disburses the grant: 80% to the builder, 20% returned pro-rata to backers.
-   - (Alternatively **② REFUND BACKERS** if not met, or the **timeout refund** if the deadline passed with no consensus.)
-   - Multiple new explorer links will appear.
-   - Click them all. You will see real token transfers.
-
-8. **Verify everything**
-   - Go back to the project detail — all txs are logged.
-   - Click "CHECK BALANCE" on the custodian — the number should have changed.
-   - In your own wallet, you should see your pro-rata 20% return (or a full refund if the milestone wasn't met).
-
-You have now completed a full conditional treasury cycle using real FlowVault primitives on testnet.
+You have now completed a full milestone-grant cycle using real FlowVault primitives on testnet.
 
 **This is exactly what judges want to see in your demo video.**
 
@@ -272,7 +241,7 @@ You have now completed a full conditional treasury cycle using real FlowVault pr
 
 ### Troubleshooting (for Dummies)
 
-- "No key" error on Pool/Resolve → Put a real funded key in `.env.local` and restart the server.
+- "No key" error on fund/lock/attest → Put a real funded key in `.env.local` and restart the server.
 - Transaction fails → Make sure the wallet has enough USDCx **and** the custodian address is funded.
 - Page shows 500 / Prisma error → The dev server hot-reloads fixes. Refresh or restart `npm run dev`.
 - Can't see your address → Click Connect again or check browser console.
@@ -299,24 +268,24 @@ Now go record that demo video — you have everything you need.
 ## Deliverables Checklist
 
 - [x] **Public GitHub repo** — https://github.com/devIykee/Covenant
-- [x] **Working demo** — https://thecovenant.vercel.app (live, primary Milestone Vault flow usable end-to-end)
-- [ ] **Demo video** — ⚠️ **TOP-PRIORITY REMAINING GAP.** Record a 2–3 min walkthrough leading with the Milestone Grant flow (create → back → appoint judges → lock → attest → disburse), showing the explorer links. Everything else is done; this is the one blocker.
+- [x] **Working demo** — https://thecovenant.vercel.app (live, primary Milestone Grant flow usable end-to-end)
+- [ ] **Demo video** — ⚠️ **TOP-PRIORITY REMAINING GAP.** Record a 2–3 min walkthrough leading with the Milestone Grant flow (create program → fund & lock escrow → builder applies → award + set milestones → attest → auto-disburse tranche), showing the explorer links. Everything else is done; this is the one blocker.
 - [x] **FlowVault integration explanation** — the "FlowVault Integration" section above (Hold/Split/Lock mapping + escrow-custodian rationale)
 - [x] **Successful testnet tx** — real `flowvault-v2 deposit` [`d31b9c00…`](https://explorer.hiro.so/txid/d31b9c0039700accf2158990090207cd78619c1977654aa2193cda9ad990d141?chain=testnet), surfaced + clickable in the live app
 - [x] **Use of FlowVault SDK/contracts** — `flowvault-sdk` `FlowVault` client; methods + file paths documented in the table above
 
 ## Vault Types
 
-The **Milestone-Gated Grant is the flagship**; the other three are secondary behaviors on the same escrow + FlowVault primitives (`src/lib/escrow.ts`). All execute real on-chain USDCx transfers:
+The **Milestone-Based Grant is the flagship**; the other three are secondary behaviors on the same escrow + FlowVault primitives (`src/lib/escrow.ts`). All execute real on-chain USDCx transfers:
 
-- **Milestone-Gated Grant** (flagship): backers fund a grant into escrow; on a verified milestone it's disbursed 80% to the builder / 20% back to backers, else refunded (including the deadline-timeout case).
+- **Milestone-Based Grant** (flagship): a grantor locks a pool; each milestone's tranche auto-disburses to the awarded builder when judges attest it met, or the remainder returns to the grantor if a milestone lapses.
 - **Payroll Vault**: each contributor check-in releases a real USDCx payment; a missed check-in claws the remainder back to the payer.
 - **Reputation Vault**: split % auto-computed from each participant's reputation score, then paid pro-rata on-chain.
 - **Insurance Pool**: pooled premiums pay the claimant on a declared incident, or refund/roll on expiry.
 
 ## Judge Attestation (trustless)
 
-**The builder cannot pick the judges** — that would be judging their own work. Judges are **appointed by backers after they fund** (a backer may appoint themselves); the builder is blocked, and a covenant cannot be pooled/locked until judges are appointed. Each judge connects their wallet and **cryptographically signs** their MET/NOT-MET vote with `@stacks/connect`. The server **verifies the signature** (`@stacks/encryption` `verifyMessageSignatureRsv`) against the judge's address before recording it, and only appointed judges count toward the 2-of-N threshold. A tampered vote fails verification. If the **deadline passes without 2-of-N consensus**, the grant times out and backers are refunded 100%.
+**The builder cannot attest their own work.** The **grantor names the judges** at award time. For the currently-active milestone, each judge connects their wallet and **cryptographically signs** their MET/NOT-MET vote with `@stacks/connect`. The server **verifies the signature** (`@stacks/encryption` `verifyMessageSignatureRsv`) against the judge's address before recording it, and only named judges count toward the 2-of-N threshold. A tampered vote fails verification. Attestation gates the **deadline-gated** payout: at the milestone's deadline block a MET-attested tranche pays the builder automatically; if the deadline passes without 2-of-N MET, the remaining pool is returned to the grantor.
 
 ## Tech
 

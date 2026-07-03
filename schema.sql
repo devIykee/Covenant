@@ -1,76 +1,106 @@
 -- CreateTable
-CREATE TABLE "Project" (
+CREATE TABLE "GrantProgram" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "title" TEXT NOT NULL,
     "description" TEXT NOT NULL,
-    "fundingGoal" TEXT NOT NULL,
-    "milestoneDescription" TEXT NOT NULL,
-    "deadlineBlock" INTEGER NOT NULL,
-    "deadlineAt" DATETIME,
-    "disputeWindowBlocks" INTEGER NOT NULL DEFAULT 144,
-    "builderAddress" TEXT NOT NULL,
-    "treasuryAddress" TEXT NOT NULL,
-    "judges" TEXT NOT NULL DEFAULT '[]',
-    "minFundingBps" INTEGER NOT NULL DEFAULT 10000,
-    "builderAcceptedPartial" BOOLEAN NOT NULL DEFAULT false,
-    "status" TEXT NOT NULL DEFAULT 'CREATED',
-    "pooledTxid" TEXT,
-    "pooledExplorerUrl" TEXT,
-    "withdrawTxid" TEXT,
-    "withdrawExplorerUrl" TEXT,
+    "conditions" TEXT NOT NULL DEFAULT '',
+    "grantorAddress" TEXT NOT NULL,
+    "totalPool" TEXT NOT NULL,
+    "custodianAddress" TEXT NOT NULL DEFAULT '',
+    "programDeadlineAt" DATETIME,
+    "programDeadlineBlock" INTEGER NOT NULL DEFAULT 0,
+    "status" TEXT NOT NULL DEFAULT 'DRAFT',
+    "fundTxid" TEXT,
+    "fundExplorerUrl" TEXT,
+    "lockTxid" TEXT,
+    "lockExplorerUrl" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL
 );
 
 -- CreateTable
-CREATE TABLE "BackerContribution" (
+CREATE TABLE "Application" (
     "id" TEXT NOT NULL PRIMARY KEY,
-    "projectId" TEXT NOT NULL,
-    "principal" TEXT NOT NULL,
-    "amount" TEXT NOT NULL,
-    "status" TEXT NOT NULL DEFAULT 'ACTIVE',
-    "depositTxid" TEXT,
-    "depositExplorerUrl" TEXT,
-    "refundTxid" TEXT,
-    "refundExplorerUrl" TEXT,
+    "programId" TEXT NOT NULL,
+    "builderAddress" TEXT NOT NULL,
+    "pitch" TEXT NOT NULL,
+    "contact" TEXT,
+    "status" TEXT NOT NULL DEFAULT 'PENDING',
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "BackerContribution_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+    CONSTRAINT "Application_programId_fkey" FOREIGN KEY ("programId") REFERENCES "GrantProgram" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
 -- CreateTable
-CREATE TABLE "JudgeAttestation" (
+CREATE TABLE "Award" (
     "id" TEXT NOT NULL PRIMARY KEY,
-    "projectId" TEXT NOT NULL,
+    "programId" TEXT NOT NULL,
+    "applicationId" TEXT NOT NULL,
+    "builderAddress" TEXT NOT NULL,
+    "amount" TEXT NOT NULL,
+    "judges" TEXT NOT NULL DEFAULT '[]',
+    "status" TEXT NOT NULL DEFAULT 'ACTIVE',
+    "activeMilestoneIndex" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "Award_programId_fkey" FOREIGN KEY ("programId") REFERENCES "GrantProgram" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+-- CreateTable
+CREATE TABLE "Milestone" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "awardId" TEXT NOT NULL,
+    "index" INTEGER NOT NULL,
+    "name" TEXT NOT NULL,
+    "description" TEXT NOT NULL DEFAULT '',
+    "deadlineAt" DATETIME,
+    "deadlineBlock" INTEGER NOT NULL DEFAULT 0,
+    "percentBps" INTEGER NOT NULL,
+    "amount" TEXT NOT NULL,
+    "lockUntilBlock" INTEGER NOT NULL DEFAULT 0,
+    "status" TEXT NOT NULL DEFAULT 'LOCKED',
+    "withdrawTxid" TEXT,
+    "withdrawExplorerUrl" TEXT,
+    "payoutTxid" TEXT,
+    "payoutExplorerUrl" TEXT,
+    "relockTxid" TEXT,
+    "relockExplorerUrl" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "Milestone_awardId_fkey" FOREIGN KEY ("awardId") REFERENCES "Award" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+-- CreateTable
+CREATE TABLE "MilestoneAttestation" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "milestoneId" TEXT NOT NULL,
     "judge" TEXT NOT NULL,
     "vote" TEXT NOT NULL,
     "signature" TEXT NOT NULL,
     "signedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "JudgeAttestation_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
-);
-
--- CreateTable
-CREATE TABLE "ProjectStateLog" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "projectId" TEXT NOT NULL,
-    "status" TEXT NOT NULL,
-    "note" TEXT,
-    "txid" TEXT,
-    "explorerUrl" TEXT,
-    "timestamp" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "ProjectStateLog_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+    CONSTRAINT "MilestoneAttestation_milestoneId_fkey" FOREIGN KEY ("milestoneId") REFERENCES "Milestone" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
 -- CreateTable
 CREATE TABLE "Distribution" (
     "id" TEXT NOT NULL PRIMARY KEY,
-    "projectId" TEXT NOT NULL,
+    "awardId" TEXT NOT NULL,
     "recipient" TEXT NOT NULL,
     "amount" TEXT NOT NULL,
     "txid" TEXT NOT NULL,
     "explorerUrl" TEXT NOT NULL,
     "kind" TEXT NOT NULL,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "Distribution_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+    CONSTRAINT "Distribution_awardId_fkey" FOREIGN KEY ("awardId") REFERENCES "Award" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+-- CreateTable
+CREATE TABLE "ProgramStateLog" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "programId" TEXT NOT NULL,
+    "status" TEXT NOT NULL,
+    "note" TEXT,
+    "txid" TEXT,
+    "explorerUrl" TEXT,
+    "timestamp" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "ProgramStateLog_programId_fkey" FOREIGN KEY ("programId") REFERENCES "GrantProgram" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
 -- CreateTable
@@ -175,7 +205,13 @@ CREATE TABLE "InsuranceClaim" (
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "JudgeAttestation_projectId_judge_key" ON "JudgeAttestation"("projectId", "judge");
+CREATE UNIQUE INDEX "Award_programId_key" ON "Award"("programId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Milestone_awardId_index_key" ON "Milestone"("awardId", "index");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "MilestoneAttestation_milestoneId_judge_key" ON "MilestoneAttestation"("milestoneId", "judge");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Reputation_principal_key" ON "Reputation"("principal");

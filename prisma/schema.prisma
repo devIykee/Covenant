@@ -1,4 +1,10 @@
-// Covenant Prisma Schema (SQLite for hackathon/demo)
+// Covenant Prisma Schema (SQLite / libSQL-Turso)
+//
+// Grant-distribution model: a Grantor funds a program into a dedicated on-chain
+// escrow custodian, a Builder applies, and on acceptance the Grantor defines a
+// sequential milestone schedule. Each milestone's tranche is time-locked in
+// FlowVault until its deadline and auto-disbursed (if judges attested MET) or
+// auto-returned to the grantor (if not) by the reconcile engine.
 generator client {
   provider = "prisma-client-js"
   engineType = "library"
@@ -8,104 +14,148 @@ datasource db {
   provider = "sqlite"
 }
 
-model Project {
-  id                  String   @id @default(cuid())
-  title               String
-  description         String
-  fundingGoal         String   // micro units as string
-  milestoneDescription String
-  deadlineBlock       Int      // Stacks block height (derived from deadlineAt)
-  deadlineAt          DateTime? // the builder's chosen deadline date + time
-  disputeWindowBlocks Int      @default(144) // ~48h on testnet approx
-  builderAddress      String
-  treasuryAddress     String   // builder's receive addr, usually same or separate
-  judges              String   @default("[]") // JSON array of appointed judge principals (chosen by investors)
-  minFundingBps       Int      @default(10000) // minimum to proceed, basis points of goal (10000 = 100%)
-  builderAcceptedPartial Boolean @default(false) // builder chose to proceed under the minimum
-  status              String   @default("CREATED") // CREATED | BACKING_OPEN | POOLED_LOCKED | DISPUTE_WINDOW | RESOLVED_SUCCESS | RESOLVED_FAILURE
-  pooledTxid          String?  // tx when custodian pooled
-  pooledExplorerUrl   String?
-  withdrawTxid        String?
-  withdrawExplorerUrl String?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+// A grant program created and funded by a single grantor.
+model GrantProgram {
+  id                   String   @id @default(cuid())
+  title                String
+  description          String
+  conditions           String   @default("") // eligibility criteria for applicants
+  grantorAddress       String
+  totalPool            String   // micro units as string
+  custodianAddress     String   @default("") // per-program derived escrow custodian
+  programDeadlineAt    DateTime? // horizon by which all milestones must resolve
+  programDeadlineBlock Int      @default(0)
+  status               String   @default("DRAFT") // DRAFT | FUNDED_OPEN | AWARDED | COMPLETED | EXPIRED
+  fundTxid             String?  // grantor's wallet -> custodian funding transfer
+  fundExplorerUrl      String?
+  lockTxid             String?  // custodian's first FlowVault lock (at award)
+  lockExplorerUrl      String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
-  contributions       BackerContribution[]
-  attestations        JudgeAttestation[]
-  stateLogs           ProjectStateLog[]
+  applications         Application[]
+  award                Award?
+  stateLogs            ProgramStateLog[]
+}
+
+// A builder's application (pitch) to an open grant program.
+model Application {
+  id             String   @id @default(cuid())
+  programId      String
+  builderAddress String
+  pitch          String
+  contact        String?
+  status         String   @default("PENDING") // PENDING | ACCEPTED | REJECTED
+  createdAt      DateTime @default(now())
+
+  program        GrantProgram @relation(fields: [programId], references: [id])
+}
+
+// The single accepted award for a program (one-builder-per-program).
+model Award {
+  id                  String   @id @default(cuid())
+  programId           String   @unique
+  applicationId       String
+  builderAddress      String
+  amount              String   // micro; equals the program pool for single-award
+  judges              String   @default("[]") // JSON array of judge principals (set by grantor)
+  status              String   @default("ACTIVE") // ACTIVE | COMPLETED | FAILED
+  activeMilestoneIndex Int     @default(0) // sequential pointer
+  createdAt           DateTime @default(now())
+
+  program             GrantProgram   @relation(fields: [programId], references: [id])
+  milestones          Milestone[]
   distributions       Distribution[]
 }
 
-model BackerContribution {
-  id              String   @id @default(cuid())
-  projectId       String
-  principal       String   // investor STX addr
-  amount          String   // micro
-  status          String   @default("ACTIVE") // ACTIVE | WITHDRAWN
-  depositTxid     String?  // user to custodian transfer tx (off-vault)
-  depositExplorerUrl String?
-  refundTxid      String?  // custodian refund tx if withdrawn
-  refundExplorerUrl String?
-  createdAt       DateTime @default(now())
+// One tranche of an award, gated on a deadline + judge attestation.
+model Milestone {
+  id                String   @id @default(cuid())
+  awardId           String
+  index             Int      // 0-based, sequential
+  name              String
+  description       String   @default("")
+  deadlineAt        DateTime?
+  deadlineBlock     Int      @default(0)
+  percentBps        Int      // basis points of the award (sums to 10000)
+  amount            String   // micro; last milestone absorbs rounding
+  lockUntilBlock    Int      @default(0) // FlowVault lock target for this tranche
+  status            String   @default("LOCKED") // LOCKED | READY_FOR_REVIEW | ATTESTED_MET | PAID | EXPIRED
+  withdrawTxid      String?  // custodian frees the remaining balance from FlowVault
+  withdrawExplorerUrl String?
+  payoutTxid        String?  // custodian -> builder tranche transfer
+  payoutExplorerUrl String?
+  relockTxid        String?  // re-lock of the remainder after this tranche pays
+  relockExplorerUrl String?
+  createdAt         DateTime @default(now())
 
-  project         Project  @relation(fields: [projectId], references: [id])
+  award             Award    @relation(fields: [awardId], references: [id])
+  attestations      MilestoneAttestation[]
+
+  @@unique([awardId, index])
 }
 
-model JudgeAttestation {
+// A judge's wallet-signed vote on one milestone (server-verified).
+model MilestoneAttestation {
   id          String   @id @default(cuid())
-  projectId   String
-  judge       String   // configured judge principal
+  milestoneId String
+  judge       String
   vote        String   // "MET" | "NOT_MET"
-  signature   String   // signed message for verification
+  signature   String
   signedAt    DateTime @default(now())
 
-  project     Project  @relation(fields: [projectId], references: [id])
+  milestone   Milestone @relation(fields: [milestoneId], references: [id])
 
-  @@unique([projectId, judge])
+  @@unique([milestoneId, judge])
 }
 
-model ProjectStateLog {
+// On-chain payout / return ledger for an award.
+model Distribution {
   id          String   @id @default(cuid())
-  projectId   String
+  awardId     String
+  recipient   String
+  amount      String
+  txid        String
+  explorerUrl String
+  kind        String   // "MILESTONE_PAYOUT" | "GRANTOR_RETURN"
+  createdAt   DateTime @default(now())
+
+  award       Award    @relation(fields: [awardId], references: [id])
+}
+
+// Program audit trail.
+model ProgramStateLog {
+  id          String   @id @default(cuid())
+  programId   String
   status      String
   note        String?
   txid        String?
   explorerUrl String?
   timestamp   DateTime @default(now())
 
-  project     Project  @relation(fields: [projectId], references: [id])
+  program     GrantProgram @relation(fields: [programId], references: [id])
 }
 
-model Distribution {
-  id              String   @id @default(cuid())
-  projectId       String
-  recipient       String
-  amount          String
-  txid            String
-  explorerUrl     String
-  kind            String   // "BUILDER_PAYOUT" | "BACKER_REWARD" | "REFUND"
-  createdAt       DateTime @default(now())
-
-  project         Project  @relation(fields: [projectId], references: [id])
-}
-
-// Reputation scores across any successful vault resolution
+// Reputation scores across any successful resolution.
 model Reputation {
   id          String   @id @default(cuid())
   principal   String   @unique
-  score       Int      @default(0)  // +1 per successful resolution involving them
+  score       Int      @default(0)
   updatedAt   DateTime @updatedAt
 }
 
-// For Payroll Feature A
+// ------------------------------------------------------------------
+// Secondary vault features (unchanged): Payroll, Reputation, Insurance
+// ------------------------------------------------------------------
+
 model PayrollVault {
   id                String   @id @default(cuid())
   payerAddress      String
   contributorAddress String
   totalBudget       String
   intervalAmount    String
-  releasedAmount    String   @default("0") // running total streamed to the contributor
-  depositTxid       String?  // payer's wallet deposit of the budget to the custodian
+  releasedAmount    String   @default("0")
+  depositTxid       String?
   depositExplorerUrl String?
   startBlock        Int      @default(0)
   endBlock          Int      @default(0)
@@ -123,27 +173,26 @@ model CheckIn {
   payrollId       String
   principal       String
   intervalBlock   Int
-  amount          String?  // amount released on this check-in
-  txid            String?  // on-chain release tx
+  amount          String?
+  txid            String?
   explorerUrl     String?
   createdAt       DateTime @default(now())
 
   payroll         PayrollVault @relation(fields: [payrollId], references: [id])
 }
 
-// For Reputation Vault Feature B
 model ReputationVault {
   id                String @id @default(cuid())
   title             String
   totalAmount       String
   lockUntilBlock    Int      @default(0)
   status            String @default("OPEN") // OPEN | DISTRIBUTED
-  depositTxid       String?  // creator's wallet deposit of the pool to the custodian
+  depositTxid       String?
   depositExplorerUrl String?
   pooledTxid        String?
   resolvedTxid      String?
   resolvedExplorerUrl String?
-  payouts           String   @default("[]") // JSON [{recipient, amount, txid, explorerUrl}]
+  payouts           String   @default("[]")
   createdAt         DateTime @default(now())
   participants      ReputationVaultParticipant[]
 }
@@ -153,11 +202,10 @@ model ReputationVaultParticipant {
   vaultId           String
   principal         String
   reputationAtTime  Int
-  computedShareBps  Int   // basis points of total
+  computedShareBps  Int
   vault             ReputationVault @relation(fields: [vaultId], references: [id])
 }
 
-// For Insurance Pool Feature C
 model InsurancePool {
   id               String  @id @default(cuid())
   title            String
@@ -168,7 +216,7 @@ model InsurancePool {
   pooledTxid       String?
   resolvedTxid     String?
   resolvedExplorerUrl String?
-  payouts          String   @default("[]") // JSON [{recipient, amount, txid, explorerUrl}]
+  payouts          String   @default("[]")
   createdAt        DateTime @default(now())
 
   contributions    InsuranceContribution[]
@@ -179,7 +227,7 @@ model InsuranceContribution {
   poolId        String
   principal     String
   amount        String
-  depositTxid   String?  // member's wallet premium deposit to the custodian
+  depositTxid   String?
   depositExplorerUrl String?
   createdAt     DateTime @default(now())
   pool          InsurancePool @relation(fields: [poolId], references: [id])

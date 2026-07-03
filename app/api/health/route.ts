@@ -16,10 +16,10 @@ export async function GET() {
 
   const usingTurso = Boolean(process.env.TURSO_DATABASE_URL);
 
-  let database: { ok: boolean; projectCount?: number; error?: string };
+  let database: { ok: boolean; programCount?: number; error?: string };
   try {
-    const projectCount = await db.project.count();
-    database = { ok: true, projectCount };
+    const programCount = await db.grantProgram.count();
+    database = { ok: true, programCount };
   } catch (e: any) {
     database = { ok: false, error: e?.message || String(e) };
   }
