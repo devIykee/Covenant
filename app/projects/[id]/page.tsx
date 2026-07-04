@@ -299,11 +299,21 @@ export default function ProgramDetail() {
       if (isJudge && activeMs) {
         if (activeMs.status === "PAID" || activeMs.status === "EXPIRED") return <Info>Nothing to attest right now.</Info>;
         const myVote = (activeMs.attestations || []).find((a: any) => eqAddr(a.judge, connectedAddr))?.vote as string | undefined;
+        const threshold = Math.min(2, judges.length);
+        const metCount = (activeMs.attestations || []).filter((a: any) => a.vote === "MET" && includesAddr(judges, a.judge)).length;
+        const enoughMet = metCount >= threshold;
+        const multi = judges.length > 1;
         return (
           <div className="space-y-2">
-            <p className="text-sm text-[var(--on-surface-variant)]">Attest milestone <strong className="text-[var(--ink)]">M{activeMs.index + 1}: {activeMs.name}</strong>. Your wallet signs the vote; the payment releases automatically at the deadline if MET reaches {Math.min(2, judges.length)}-of-{judges.length}.</p>
+            <p className="text-sm text-[var(--on-surface-variant)]">Attest milestone <strong className="text-[var(--ink)]">M{activeMs.index + 1}: {activeMs.name}</strong>. Your wallet signs the vote; the payment releases automatically at the deadline{multi ? ` once ${threshold} of ${judges.length} judges attest MET` : " if you attest MET"}.</p>
             {myVote ? (
-              <p className="text-sm text-[var(--brass)]">✓ You attested <strong>{myVote === "MET" ? "MET" : "NOT MET"}</strong>. Waiting on the deadline and other judges.</p>
+              <p className="text-sm text-[var(--brass)]">✓ You attested <strong>{myVote === "MET" ? "MET" : "NOT MET"}</strong>.{" "}
+                {enoughMet
+                  ? "Waiting on the deadline for the automatic payout."
+                  : multi
+                  ? `Waiting on the deadline and other judges (${metCount}/${threshold} MET).`
+                  : "Waiting on the deadline."}
+              </p>
             ) : null}
             <div className="flex gap-3">
               <button disabled={busy || !!myVote} onClick={() => attest("MET")} className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed">{myVote === "MET" ? "ATTESTED MET ✓" : "ATTEST MET"}</button>
