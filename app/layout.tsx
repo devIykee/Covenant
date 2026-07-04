@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Source_Serif_4, Public_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "sonner";
+import { Analytics } from "@vercel/analytics/next";
 
 const sourceSerif = Source_Serif_4({
   variable: "--font-display",
@@ -52,6 +53,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-[var(--parchment)] text-[var(--ink)]">
         {children}
         <Toaster position="top-center" richColors closeButton />
+        <Analytics />
       </body>
     </html>
   );
