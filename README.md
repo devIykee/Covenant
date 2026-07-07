@@ -2,7 +2,7 @@
 
 **Covenant** is a conditional treasury platform built for the FlowVault Builder Bounty on Stacks testnet.
 
-**🔗 Live demo: [thecovenant.vercel.app](https://thecovenant.vercel.app)**
+**Live demo: [thecovenant.vercel.app](https://thecovenant.vercel.app)**
 
 Funds only move when real-world conditions are verifiably met.
 
@@ -66,7 +66,7 @@ All state changes and distributions are logged with txids + direct explorer link
 
 This satisfies bounty emphasis on "depth of use of FlowVault's programmable primitives" and "composability".
 
-## ✅ Live testnet transaction (auditable)
+## Live testnet transaction (auditable)
 
 A real, executed FlowVault `set-routing-rules` + `deposit` on Stacks testnet, produced by the pool-lock step and **surfaced in the running app** (the program page links straight to the explorer):
 
@@ -113,14 +113,14 @@ turso db tokens create covenant          # -> TURSO_AUTH_TOKEN
 
 Then add `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, and `STACKS_PRIVATE_KEY` in **Vercel → Project → Settings → Environment Variables** and redeploy.
 
-## 🚀 Zero to Hero Guide (Even if you've never used Stacks before)
+## Zero to Hero Guide (Even if you've never used Stacks before)
 
 This guide will take you from a completely blank machine to successfully creating, funding, and resolving a real conditional treasury on Stacks testnet — and seeing the on-chain transactions yourself.
 
 ### Prerequisites (5 minutes)
 
 1. **Install a Stacks wallet** (choose one):
-   - [Xverse](https://www.xverse.app) (recommended for beginners)
+   - [Xverse](https://www.xverse.app) (recommended)
    - Leather Wallet
 
 2. **Get free testnet tokens** (you need both):
@@ -221,7 +221,7 @@ Open **http://localhost:3000** — or read the built-in **Docs** page at **http:
 
 You have now completed a full milestone-grant cycle using real FlowVault primitives on testnet.
 
-**This is exactly what judges want to see in your demo video.**
+
 
 ### Troubleshooting for Complete Beginners
 
@@ -230,49 +230,11 @@ You have now completed a full milestone-grant cycle using real FlowVault primiti
 - Page is blank or 500 → Just refresh. The dev server hot-reloads fixes automatically.
 - Address not showing after connect → Hard refresh the page (Cmd/Ctrl + Shift + R).
 - Dark mode → Toggle the sun/moon icon in the nav. The choice is saved and applied before first paint (no flash) on every page.
-
-### What Makes This Docs Amazing for Dummies
-
-- Every single button click is described.
-- Exact text you type is given.
-- You are told exactly which explorer links will appear.
-- Common "why is it not working" problems are listed.
-- You end up with real, auditable testnet transactions — ready for your bounty video and submission.
-
-### Troubleshooting (for Dummies)
-
 - "No key" error on fund/lock/attest → Put a real funded key in `.env.local` and restart the server.
 - Transaction fails → Make sure the wallet has enough USDCx **and** the custodian address is funded.
 - Page shows 500 / Prisma error → The dev server hot-reloads fixes. Refresh or restart `npm run dev`.
 - Can't see your address → Click Connect again or check browser console.
 - `prisma db push` errors → make sure `DATABASE_URL` is set (the included `.env.example` has it); the URL lives in `prisma.config.ts` for Prisma 7.
-
-### Useful Helpers Added for You (Zero Friction)
-
-- **Beautiful Wallet UX**: Connect once → your address appears in the nav (truncated + copy). Auto-detects on reload. Full disconnect support.
-- **Custodian helpers** (in every project detail):
-  - One-click **COPY** for the custodian address.
-  - **CHECK BALANCE** button that shows live USDCx balance of the custodian.
-- **Dark Mode**: Sun/Moon toggle in the nav. Full beautiful dark ledger theme (persisted).
-- All actions produce real explorer links you can click immediately.
-- Amazing **Zero-to-Hero docs** right here in this README.
-
-### Dark Mode
-
-Just click the ☀️ / 🌙 icon in the top navigation. It uses a tasteful dark variant of the original parchment/ink design system and is fully persisted.
-
-Enjoy building programmable trust. 
-
-Now go record that demo video — you have everything you need.
-
-## Deliverables Checklist
-
-- [x] **Public GitHub repo** — https://github.com/devIykee/Covenant
-- [x] **Working demo** — https://thecovenant.vercel.app (live, primary Milestone Grant flow usable end-to-end)
-- [ ] **Demo video** — ⚠️ **TOP-PRIORITY REMAINING GAP.** Record a 2–3 min walkthrough leading with the Milestone Grant flow (create program → fund & lock escrow → builder applies → award + set milestones → attest → auto-disburse tranche), showing the explorer links. Everything else is done; this is the one blocker.
-- [x] **FlowVault integration explanation** — the "FlowVault Integration" section above (Hold/Split/Lock mapping + escrow-custodian rationale)
-- [x] **Successful testnet tx** — real `flowvault-v2 deposit` [`d31b9c00…`](https://explorer.hiro.so/txid/d31b9c0039700accf2158990090207cd78619c1977654aa2193cda9ad990d141?chain=testnet), surfaced + clickable in the live app
-- [x] **Use of FlowVault SDK/contracts** — `flowvault-sdk` `FlowVault` client; methods + file paths documented in the table above
 
 ## Vault Types
 
@@ -293,14 +255,6 @@ Next.js App Router + TypeScript + Tailwind (design system from `stitch_covenant_
 Prisma + SQLite
 flowvault-sdk@0.1.1 + @stacks/connect + @stacks/transactions
 
-## Bounty Notes
-
-The design prioritizes:
-- 35% Innovation: real conditional treasury behavior beyond simple wrappers
-- 30% FlowVault depth: every major action uses set-rules / deposit / withdraw
-- 20% Technical: typed errors, polling state, explorer auditability, shared escrow module
-- 15% Ecosystem: composable, documented pattern for future Stacks conditional treasuries
-
 ## License
 
-MIT for bounty purposes.
+MIT.
